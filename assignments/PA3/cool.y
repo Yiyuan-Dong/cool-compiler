@@ -148,6 +148,14 @@
     
     
     /* Precedence declarations go here. */
+    %left IN    
+    %left ASSIGN
+    %left NOT
+    %left LE '=' '<'
+    %left '+' '-'
+    %left '*' '/'
+    %left '~'
+    %left '@' '.' ISVOID
     
     
     %%
@@ -176,15 +184,15 @@
         stringtable.add_string(curr_filename)); }
     | CLASS TYPEID INHERITS TYPEID '{' feature_list '}' ';'
         { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); }
+    | error
+        { }
     ;
     
     /* Feature list may be empty, but no empty features in list. */
     feature_list :		/* empty */
         { $$ = nil_Features(); }
-    |  feature
-        { $$ = single_Features($1); }
-    |  feature_list feature
-        { $$ = append_Features($1, single_Features($2)); }
+    |  feature feature_list
+        { $$ = append_Features(single_Features($1), $2); }
     ;
     
     feature : OBJECTID '(' formal_list ')'  ':' TYPEID '{' expression '}' ';'
@@ -193,6 +201,8 @@
         { $$ = attr( $1, $3, no_expr()); }
     | OBJECTID ':' TYPEID ASSIGN expression ';'
         { $$ = attr( $1, $3, $5); }
+    | error
+        { }
     ;   
 
     formal_list :    /* empty */
@@ -261,6 +271,10 @@
         {
             $$ = let($2, $4, $6, $7);
         }
+    | ',' error partial_let
+        {
+	        yyerrok;
+        }
     ;
 
     expression : OBJECTID ASSIGN expression
@@ -290,6 +304,10 @@
     | '{' expression_list_semicolon '}'
         { 
             $$ = block($2); 
+        }
+    | '{' error '}'
+        {
+            yyerrok;
         }
     | LET OBJECTID ':' TYPEID partial_let
         {
@@ -337,7 +355,7 @@
         }
     | expression LE expression
         {
-           $$ = leq($1, $3);
+            $$ = leq($1, $3);
         }
     | expression '=' expression
         {

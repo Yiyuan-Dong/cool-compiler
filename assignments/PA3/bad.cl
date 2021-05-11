@@ -27,3 +27,27 @@ Class D inherts A {
 Class E inherits A {
 ;
 
+(* New error for test *)
+
+Class G {
+    main(): Object {  {
+        1;
+        2;
+        let a:Int, b:int, c:Int in {
+             1;
+	     2 234 sdfsdffadsfasf
+	     A;
+	};
+	1;
+    }  };
+};
+
+Class F{
+    a : Int <- 1;
+    test(): Int { {
+        1;
+        {2; A; B;};     (* Error *)
+        2;
+	{2 3 4 5}
+    } };
+};
