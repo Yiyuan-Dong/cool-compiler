@@ -237,6 +237,17 @@ ostream& ClassTable::semant_error()
      errors. Part 2) can be done in a second stage, when you want
      to build mycoolc.
  */
+typedef struct {
+    Symbol name;
+    Symbol type_decl; 
+} formal_node;
+
+typedef struct {
+    formal_node* formals;
+    int formal_count;
+    Symbol return_type;
+    Symbol name;
+} method_node;
 
 typedef struct {
     int visit_flag;
@@ -244,24 +255,26 @@ typedef struct {
     Symbol parent;
     int parent_index;
     int depth;
+    method_node* method_nodes;
+    int method_count;
 } class_node;
 
 // Important
-static class_node *nodes;  // Each class (including Object, IO, etc.) corresponding to a class 
+static class_node *class_nodes;  // Each class (including Object, IO, etc.) corresponding to a class 
 static int classes_number;
 
 
-void init_nodes(){
-    nodes[0] = class_node{-1, Object, Object, -1, 0};
-    nodes[1] = class_node{-1, Int, Object, 0, 1};
-    nodes[2] = class_node{-1, Bool, Object, 0, 1};
-    nodes[3] = class_node{-1, Str, Object, 0, 1};
-    nodes[4] = class_node{-1, IO, Object, 0, 1}; 
+void init_class_nodes(){
+    class_nodes[0] = class_node{-1, Object, Object, -1, 0};
+    class_nodes[1] = class_node{-1, Int, Object, 0, 1};
+    class_nodes[2] = class_node{-1, Bool, Object, 0, 1};
+    class_nodes[3] = class_node{-1, Str, Object, 0, 1};
+    class_nodes[4] = class_node{-1, IO, Object, 0, 1}; 
 }
 
 int find_symbol(int length, Symbol target) {
     for (int i = 0; i < length; i++) {
-        if (nodes[i].name->equal_string(target->get_string(), target->get_len())){
+        if (class_nodes[i].name->equal_string(target->get_string(), target->get_len())){
             return i;
         }
     }
@@ -270,22 +283,26 @@ int find_symbol(int length, Symbol target) {
 }
 
 int get_depth(int node_index){
-    if (nodes[node_index].depth < 0) {
+    if (class_nodes[node_index].depth < 0) {
         assert(node_index >= 5);
-        int parent_depth = get_depth(nodes[node_index].parent_index);
-        nodes[node_index].depth = parent_depth + 1;
+        int parent_depth = get_depth(class_nodes[node_index].parent_index);
+        class_nodes[node_index].depth = parent_depth + 1;
     }
-    return nodes[node_index].depth;
+    return class_nodes[node_index].depth;
 }
 
-void debug_print_nodes(){
-        if (semant_debug){
+void fullfill_class(int class_index, Class_ class_){
+
+}
+
+void debug_print_class_nodes(){
+    if (semant_debug){
         cerr << "class count: " << classes_number << endl;
         for (int i = 0; i < classes_number; i++){
-            cerr << "name: " << nodes[i].name->get_string() << ' ' 
-                << ",parent: " << nodes[i].parent->get_string() << ' ' 
-                << ",parent index: " << nodes[i].parent_index << ' '
-                << ",depth: " << nodes[i].depth << endl;
+            cerr << "name: " << class_nodes[i].name->get_string() << ' ' 
+                << ",parent: " << class_nodes[i].parent->get_string() << ' ' 
+                << ",parent index: " << class_nodes[i].parent_index << ' '
+                << ",depth: " << class_nodes[i].depth << endl;
         }
     } 
 }
@@ -294,6 +311,32 @@ void debug_count(){
     static int counter = 0;
     if (semant_debug){
         cerr << "Count: " << counter++ << endl; 
+    }
+}
+
+void debug_print_methods(){
+    if (semant_debug) {
+        cerr << "Methods" << endl;
+        for (int i = 0; i < classes_number; i++){
+            cerr << "class: " << class_nodes[i].name->get_string() 
+                << ", methods count: " << class_nodes[i].method_count
+                << endl;
+
+            for (int j = 0; j < class_nodes[i].method_count; j++){
+                method_node *method_node_ptr = class_nodes[i].method_nodes + j;
+                cerr << "  method: " << method_node_ptr->name->get_string()
+                    << ", return type: " << method_node_ptr->return_type->get_string() 
+                    << ", formals count: " << method_node_ptr->formal_count 
+                    << endl;
+
+                for (int k = 0; k < method_node_ptr->formal_count; k++){
+                    formal_node *formal_node_ptr = method_node_ptr->formals + k;
+                    cerr << "    [" << formal_node_ptr->name 
+                        << ", " << formal_node_ptr->type_decl
+                        << "]" << endl;
+                }
+            }
+        }
     }
 }
 
@@ -309,12 +352,12 @@ void program_class::semant()
 
     // +5 :Object, Bool, Int, Str and IO
     classes_number = classes->len() + 5;
-    nodes = (class_node *)malloc(classes_number * sizeof(class_node));
-    init_nodes();
+    class_nodes = (class_node *)malloc(classes_number * sizeof(class_node));
+    init_class_nodes();
 
     // 1. Find all classess
     for (int i = classes->first(); classes->more(i); i = classes->next(i)){
-        nodes[i + 5] = class_node{
+        class_nodes[i + 5] = class_node{
             -1, 
             classes->nth(i)->get_name(), 
             classes->nth(i)->get_parent(),
@@ -323,25 +366,25 @@ void program_class::semant()
         };
  
         // Should not inherit from self
-        if (nodes[i + 5].name == nodes[i + 5].parent){
+        if (class_nodes[i + 5].name == class_nodes[i + 5].parent){
             cerr << "Inherits from itself" << endl;
             classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));
             exit(1);
         }
     }
 
-    debug_print_nodes();
+    debug_print_class_nodes();
     debug_count();
 
     // 2. Generate inherit graph
     for (int i = classes->first(); classes->more(i); i = classes->next(i)){
         int flag = i;
-        int nodes_index = i + 5;
+        int class_nodes_index = i + 5;
         int class_index = i;
-        nodes[nodes_index].visit_flag = flag;
+        class_nodes[class_nodes_index].visit_flag = flag;
         while (true){
-            int next_index = find_symbol(classes_number, nodes[nodes_index].parent);
-            nodes[nodes_index].parent_index = next_index;
+            int next_index = find_symbol(classes_number, class_nodes[class_nodes_index].parent);
+            class_nodes[class_nodes_index].parent_index = next_index;
 
             if (next_index < 0){
                 cerr << "parent class not find" << endl;
@@ -353,29 +396,108 @@ void program_class::semant()
             }
 
             // found a cycle
-            if (nodes[next_index].visit_flag == flag){
+            if (class_nodes[next_index].visit_flag == flag){
                 cerr <<  "find a cycle in inherit graph" << endl;
                 classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));  // Here, use 'i' is OK
                 exit(1);
             }
 
-            nodes[next_index].visit_flag = flag;
-            nodes_index = next_index;
-            class_index = nodes_index - 5;
+            class_nodes[next_index].visit_flag = flag;
+            class_nodes_index = next_index;
+            class_index = class_nodes_index - 5;
         }
     }
 
-    debug_print_nodes();
+    debug_print_class_nodes();
     debug_count();
 
     // 3. Calculate depth
     for (int i = classes->first(); classes->more(i); i = classes->next(i)){
-        assert(nodes[i + 5].parent_index >= 0);
+        assert(class_nodes[i + 5].parent_index >= 0);
         get_depth(i + 5);
     }
 
-    debug_print_nodes();
+    debug_print_class_nodes();
     debug_count();
+
+    // 4. Generate method environment
+    //   a. Count how many methods are there for each class
+    for (int class_index = classes->first(); 
+            classes->more(class_index); 
+            class_index = classes->next(class_index)){
+        int class_node_index = class_index + 5;
+        int method_count = 0;
+
+        Features features = classes->nth(class_index)->get_features();
+
+        for (int feature_index = features->first(); 
+                features->more(feature_index); 
+                feature_index = features->next(feature_index)){
+            if (features->nth(feature_index)->get_type() == TYPE_METHOD){
+                method_count++;
+            }
+        }
+
+        class_nodes[class_node_index].method_count = method_count;
+        class_nodes[class_node_index].method_nodes = 
+            (method_node*) malloc(method_count * sizeof(method_node));
+    }
+
+    //   b. Fullfill each method
+    for (int class_index = classes->first(); 
+            classes->more(class_index); 
+            class_index = classes->next(class_index)){
+        int class_node_index = class_index + 5;
+
+        Features features = classes->nth(class_index)->get_features();
+        int method_index = 0;
+
+        for (int feature_index = features->first(); 
+                features->more(feature_index); 
+                feature_index = features->next(feature_index)){
+            
+            Feature feature = features->nth(feature_index);
+            if (feature->get_type() == TYPE_ATTR){
+                continue;
+            }
+            
+            method_node *method_node_ptr = class_nodes[class_node_index].method_nodes + method_index;
+            method_node_ptr->name = feature->get_name();
+            method_node_ptr->return_type = feature->get_return_type();
+            Formals formals = feature->get_formals();
+            int formal_count = 0;
+
+            // Count how many formals for each method
+            for (int formal_index = 0; 
+                    formals->more(formal_index); 
+                    formal_index = formals->next(formal_index)){
+                formal_count++;
+            }
+
+            method_node_ptr->formal_count = formal_count;
+            method_node_ptr->formals = 
+                (formal_node*)malloc(formal_count * sizeof(formal_node));
+            
+            // Fullfill each formal
+            for (int formal_index = 0; 
+                    formals->more(formal_index); 
+                    formal_index = formals->next(formal_index)){
+                Formal formal = formals->nth(formal_index);
+                formal_node *formal_node_ptr = method_node_ptr->formals + formal_index;
+
+                formal_node_ptr->name = formal->get_name();
+                formal_node_ptr->type_decl = formal->get_type_decl();
+            }
+
+            method_index++;
+        }
+    }
+
+    debug_print_methods();
+    debug_count();
+
+
+    exit(1); // TODO: delete it!
 
     if (classtable->errors()) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;

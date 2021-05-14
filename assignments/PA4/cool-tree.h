@@ -12,6 +12,9 @@
 #include "tree.h"
 #include "cool-tree.handcode.h"
 
+#define TYPE_METHOD (0)
+#define TYPE_ATTR   (1)
+
 
 // define the class for phylum
 // define simple phylum - Program
@@ -39,6 +42,7 @@ public:
    // PA4
    virtual Symbol get_name() = 0;  
    virtual Symbol get_parent() = 0;
+   virtual Features get_features() = 0;
 
 #ifdef Class__EXTRAS
    Class__EXTRAS
@@ -54,6 +58,13 @@ public:
    tree_node *copy()		 { return copy_Feature(); }
    virtual Feature copy_Feature() = 0;
 
+   // PA4
+   virtual int get_type() = 0;
+   virtual Formals get_formals() = 0;
+   virtual Symbol get_name() = 0;
+   virtual Symbol get_return_type() = 0;
+   virtual Symbol get_type_decl() = 0;
+
 #ifdef Feature_EXTRAS
    Feature_EXTRAS
 #endif
@@ -67,6 +78,10 @@ class Formal_class : public tree_node {
 public:
    tree_node *copy()		 { return copy_Formal(); }
    virtual Formal copy_Formal() = 0;
+
+   // PA4
+   virtual Symbol get_name() = 0;
+   virtual Symbol get_type_decl() = 0;
 
 #ifdef Formal_EXTRAS
    Formal_EXTRAS
@@ -169,6 +184,7 @@ public:
    // PA4
    Symbol get_name() { return name; } 
    Symbol get_parent() { return parent; }
+   Features get_features() { return features; }
 
 #ifdef Class__SHARED_EXTRAS
    Class__SHARED_EXTRAS
@@ -196,6 +212,13 @@ public:
    Feature copy_Feature();
    void dump(ostream& stream, int n);
 
+   // PA4
+   int get_type(){ return TYPE_METHOD; }
+   Formals get_formals(){ return formals; };
+   Symbol get_name(){ return name; }
+   Symbol get_return_type(){ return return_type; }
+   Symbol get_type_decl(){ return NULL; }
+
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
 #endif
@@ -219,6 +242,13 @@ public:
    }
    Feature copy_Feature();
    void dump(ostream& stream, int n);
+   
+   // PA4
+   int get_type(){ return TYPE_ATTR; }
+   Formals get_formals(){ return NULL; }
+   Symbol get_name(){ return name; }
+   Symbol get_return_type(){ return NULL; }
+   Symbol get_type_decl(){ return type_decl; }
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -241,6 +271,10 @@ public:
    }
    Formal copy_Formal();
    void dump(ostream& stream, int n);
+
+   // PA4
+   Symbol get_name(){ return name; }
+   Symbol get_type_decl(){ return type_decl; }
 
 #ifdef Formal_SHARED_EXTRAS
    Formal_SHARED_EXTRAS
