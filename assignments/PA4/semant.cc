@@ -89,6 +89,8 @@ ClassTable::ClassTable(Classes classes) : semant_errors(0) , error_stream(cerr) 
 
 }
 
+void fullfill_class(int class_node_index, Class_ class_);
+
 void ClassTable::install_basic_classes() {
 
     // The tree package uses these globals to annotate the classes built below.
@@ -188,6 +190,13 @@ void ClassTable::install_basic_classes() {
 						      Str, 
 						      no_expr()))),
 	       filename);
+       
+    // PA4    
+    fullfill_class(0, Object_class);
+    fullfill_class(1, Int_class);
+    fullfill_class(2, Bool_class);
+    fullfill_class(3, Str_class);
+    fullfill_class(4, IO_class);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -265,6 +274,7 @@ static int classes_number;
 
 
 void init_class_nodes(){
+    // Order is important! Object, Int, Bool, Str, IO!
     class_nodes[0] = class_node{-1, Object, Object, -1, 0};
     class_nodes[1] = class_node{-1, Int, Object, 0, 1};
     class_nodes[2] = class_node{-1, Bool, Object, 0, 1};
@@ -291,8 +301,66 @@ int get_depth(int node_index){
     return class_nodes[node_index].depth;
 }
 
-void fullfill_class(int class_index, Class_ class_){
+void fullfill_class(int class_node_index, Class_ class_){
+    Features features = class_->get_features();
 
+    //   a. Count how many methods are there for each class
+    int method_count = 0;
+
+    for (int feature_index = features->first(); 
+            features->more(feature_index); 
+            feature_index = features->next(feature_index)){
+        if (features->nth(feature_index)->get_type() == TYPE_METHOD){
+            method_count++;
+        }
+    }
+
+    class_nodes[class_node_index].method_count = method_count;
+    class_nodes[class_node_index].method_nodes = 
+        (method_node*) malloc(method_count * sizeof(method_node));
+
+    // b. Fullfill each method
+    int method_index = 0;
+
+    for (int feature_index = features->first(); 
+            features->more(feature_index); 
+            feature_index = features->next(feature_index)){
+        
+        Feature feature = features->nth(feature_index);
+        if (feature->get_type() == TYPE_ATTR){
+            continue;
+        }
+        
+        method_node *method_node_ptr = class_nodes[class_node_index].method_nodes + method_index;
+        method_node_ptr->name = feature->get_name();
+        method_node_ptr->return_type = feature->get_return_type();
+        Formals formals = feature->get_formals();
+        int formal_count = 0;
+
+        // Count how many formals for each method
+        for (int formal_index = 0; 
+                formals->more(formal_index); 
+                formal_index = formals->next(formal_index)){
+            formal_count++;
+        }
+
+        method_node_ptr->formal_count = formal_count;
+        method_node_ptr->formals = 
+            (formal_node*)malloc(formal_count * sizeof(formal_node));
+        
+        // Fullfill each formal
+        for (int formal_index = 0; 
+                formals->more(formal_index); 
+                formal_index = formals->next(formal_index)){
+            Formal formal = formals->nth(formal_index);
+            formal_node *formal_node_ptr = method_node_ptr->formals + formal_index;
+
+            formal_node_ptr->name = formal->get_name();
+            formal_node_ptr->type_decl = formal->get_type_decl();
+        }
+
+        method_index++;
+    }
 }
 
 void debug_print_class_nodes(){
@@ -421,76 +489,12 @@ void program_class::semant()
     debug_count();
 
     // 4. Generate method environment
-    //   a. Count how many methods are there for each class
+    classtable->install_basic_classes_public();
+    
     for (int class_index = classes->first(); 
             classes->more(class_index); 
             class_index = classes->next(class_index)){
-        int class_node_index = class_index + 5;
-        int method_count = 0;
-
-        Features features = classes->nth(class_index)->get_features();
-
-        for (int feature_index = features->first(); 
-                features->more(feature_index); 
-                feature_index = features->next(feature_index)){
-            if (features->nth(feature_index)->get_type() == TYPE_METHOD){
-                method_count++;
-            }
-        }
-
-        class_nodes[class_node_index].method_count = method_count;
-        class_nodes[class_node_index].method_nodes = 
-            (method_node*) malloc(method_count * sizeof(method_node));
-    }
-
-    //   b. Fullfill each method
-    for (int class_index = classes->first(); 
-            classes->more(class_index); 
-            class_index = classes->next(class_index)){
-        int class_node_index = class_index + 5;
-
-        Features features = classes->nth(class_index)->get_features();
-        int method_index = 0;
-
-        for (int feature_index = features->first(); 
-                features->more(feature_index); 
-                feature_index = features->next(feature_index)){
-            
-            Feature feature = features->nth(feature_index);
-            if (feature->get_type() == TYPE_ATTR){
-                continue;
-            }
-            
-            method_node *method_node_ptr = class_nodes[class_node_index].method_nodes + method_index;
-            method_node_ptr->name = feature->get_name();
-            method_node_ptr->return_type = feature->get_return_type();
-            Formals formals = feature->get_formals();
-            int formal_count = 0;
-
-            // Count how many formals for each method
-            for (int formal_index = 0; 
-                    formals->more(formal_index); 
-                    formal_index = formals->next(formal_index)){
-                formal_count++;
-            }
-
-            method_node_ptr->formal_count = formal_count;
-            method_node_ptr->formals = 
-                (formal_node*)malloc(formal_count * sizeof(formal_node));
-            
-            // Fullfill each formal
-            for (int formal_index = 0; 
-                    formals->more(formal_index); 
-                    formal_index = formals->next(formal_index)){
-                Formal formal = formals->nth(formal_index);
-                formal_node *formal_node_ptr = method_node_ptr->formals + formal_index;
-
-                formal_node_ptr->name = formal->get_name();
-                formal_node_ptr->type_decl = formal->get_type_decl();
-            }
-
-            method_index++;
-        }
+        fullfill_class(class_index + 5, classes->nth(class_index));
     }
 
     debug_print_methods();
