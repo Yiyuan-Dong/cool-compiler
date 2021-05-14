@@ -237,8 +237,69 @@ ostream& ClassTable::semant_error()
      errors. Part 2) can be done in a second stage, when you want
      to build mycoolc.
  */
+
+typedef struct {
+    int visit_flag;
+    Symbol name;
+    Symbol parent;
+    int parent_index;
+    int depth;
+} class_node;
+
+// Important
+static class_node *nodes;  // Each class (including Object, IO, etc.) corresponding to a class 
+static int classes_number;
+
+
+void init_nodes(){
+    nodes[0] = class_node{-1, Object, Object, -1, 0};
+    nodes[1] = class_node{-1, Int, Object, 0, 1};
+    nodes[2] = class_node{-1, Bool, Object, 0, 1};
+    nodes[3] = class_node{-1, Str, Object, 0, 1};
+    nodes[4] = class_node{-1, IO, Object, 0, 1}; 
+}
+
+int find_symbol(int length, Symbol target) {
+    for (int i = 0; i < length; i++) {
+        if (nodes[i].name->equal_string(target->get_string(), target->get_len())){
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+int get_depth(int node_index){
+    if (nodes[node_index].depth < 0) {
+        assert(node_index >= 5);
+        int parent_depth = get_depth(nodes[node_index].parent_index);
+        nodes[node_index].depth = parent_depth + 1;
+    }
+    return nodes[node_index].depth;
+}
+
+void debug_print_nodes(){
+        if (semant_debug){
+        cerr << "class count: " << classes_number << endl;
+        for (int i = 0; i < classes_number; i++){
+            cerr << "name: " << nodes[i].name->get_string() << ' ' 
+                << ",parent: " << nodes[i].parent->get_string() << ' ' 
+                << ",parent index: " << nodes[i].parent_index << ' '
+                << ",depth: " << nodes[i].depth << endl;
+        }
+    } 
+}
+
+void debug_count(){
+    static int counter = 0;
+    if (semant_debug){
+        cerr << "Count: " << counter++ << endl; 
+    }
+}
+
 void program_class::semant()
 {
+    debug_count();
     initialize_constants();
 
     /* ClassTable constructor may do some semantic analysis */
@@ -246,9 +307,79 @@ void program_class::semant()
 
     /* some semantic analysis code may go here */
 
+    // +5 :Object, Bool, Int, Str and IO
+    classes_number = classes->len() + 5;
+    nodes = (class_node *)malloc(classes_number * sizeof(class_node));
+    init_nodes();
+
+    // 1. Find all classess
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)){
+        nodes[i + 5] = class_node{
+            -1, 
+            classes->nth(i)->get_name(), 
+            classes->nth(i)->get_parent(),
+            -1, 
+            -1
+        };
+ 
+        // Should not inherit from self
+        if (nodes[i + 5].name == nodes[i + 5].parent){
+            cerr << "Inherits from itself" << endl;
+            classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));
+            exit(1);
+        }
+    }
+
+    debug_print_nodes();
+    debug_count();
+
+    // 2. Generate inherit graph
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)){
+        int flag = i;
+        int nodes_index = i + 5;
+        int class_index = i;
+        nodes[nodes_index].visit_flag = flag;
+        while (true){
+            int next_index = find_symbol(classes_number, nodes[nodes_index].parent);
+            nodes[nodes_index].parent_index = next_index;
+
+            if (next_index < 0){
+                cerr << "parent class not find" << endl;
+                classtable->semant_error(classes->nth(class_index)->get_filename(), classes->nth(class_index));
+                exit(1);
+            } 
+            if (next_index < 5){  // Object, Bool, Int, Str, IO
+                break;
+            }
+
+            // found a cycle
+            if (nodes[next_index].visit_flag == flag){
+                cerr <<  "find a cycle in inherit graph" << endl;
+                classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));  // Here, use 'i' is OK
+                exit(1);
+            }
+
+            nodes[next_index].visit_flag = flag;
+            nodes_index = next_index;
+            class_index = nodes_index - 5;
+        }
+    }
+
+    debug_print_nodes();
+    debug_count();
+
+    // 3. Calculate depth
+    for (int i = classes->first(); classes->more(i); i = classes->next(i)){
+        assert(nodes[i + 5].parent_index >= 0);
+        get_depth(i + 5);
+    }
+
+    debug_print_nodes();
+    debug_count();
+
     if (classtable->errors()) {
-	cerr << "Compilation halted due to static semantic errors." << endl;
-	exit(1);
+	    cerr << "Compilation halted due to static semantic errors." << endl;
+	    exit(1);
     }
 }
 

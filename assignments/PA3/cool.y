@@ -27,7 +27,9 @@
       Current = Rhs[1];                             \
       node_lineno = Current;
     
-    
+    /* In tree.cc: line_number = node_lineno; 
+     * the line number of a node is set by node_lineno
+     */  
     #define SET_NODELOC(Current)  \
     node_lineno = Current;
     
@@ -72,6 +74,9 @@
     }
     
     */
+
+    /* I do not set line number explicitly here since I find 
+       default behaviour is good enough */
     
     
     
