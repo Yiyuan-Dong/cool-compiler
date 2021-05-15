@@ -1,3 +1,7 @@
+Class D{
+
+};
+
 Class A inherits B{
 
 };

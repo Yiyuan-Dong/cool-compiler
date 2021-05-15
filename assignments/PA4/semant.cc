@@ -271,7 +271,13 @@ typedef struct {
 // Important
 static class_node *class_nodes;  // Each class (including Object, IO, etc.) corresponding to a class 
 static int classes_number;
+static int error_count;
 
+ostream& semant_error(Symbol filename, tree_node *t){
+    cerr << filename << ":" << t->get_line_number() << ": ";
+    error_count++;
+    return cerr;
+}
 
 void init_class_nodes(){
     // Order is important! Object, Int, Bool, Str, IO!
@@ -282,8 +288,15 @@ void init_class_nodes(){
     class_nodes[4] = class_node{-1, IO, Object, 0, 1}; 
 }
 
-int find_symbol(int length, Symbol target) {
-    for (int i = 0; i < length; i++) {
+Symbol fetch_class_name(int class_node_index){
+    assert(class_node_index >= 0);
+    assert(class_node_index < classes_number);
+
+    return class_nodes[class_node_index].name;
+}
+
+int find_symbol(Symbol target) {
+    for (int i = 0; i < classes_number; i++) {
         if (class_nodes[i].name->equal_string(target->get_string(), target->get_len())){
             return i;
         }
@@ -291,6 +304,42 @@ int find_symbol(int length, Symbol target) {
 
     return -1;
 }
+
+bool check_parent(int child_index, int parent_index){
+    assert(child_index >= 0);
+    assert(child_index < classes_number);
+    assert(parent_index >= 0);
+    assert(parent_index < classes_number);
+
+    int temp_index = child_index;
+    while (class_nodes[temp_index].depth > class_nodes[parent_index].depth){
+        temp_index = class_nodes[temp_index].parent_index;
+    }
+
+    return temp_index == parent_index;
+}
+
+int LCA(int a_index, int b_index){
+    assert(a_index >= 0);
+    assert(a_index < classes_number);
+    assert(b_index >= 0);
+    assert(b_index < classes_number);
+
+    while(class_nodes[a_index].depth < class_nodes[b_index].depth){
+        a_index = class_nodes[a_index].parent_index;
+    }
+    while(class_nodes[b_index].depth < class_nodes[a_index].depth){
+        b_index = class_nodes[b_index].parent_index;
+    }
+
+    while (a_index != b_index){
+        a_index = class_nodes[a_index].parent_index;
+        b_index = class_nodes[b_index].parent_index;
+    }
+
+    return a_index;
+}
+
 
 int get_depth(int node_index){
     if (class_nodes[node_index].depth < 0) {
@@ -316,8 +365,7 @@ void fullfill_class(int class_node_index, Class_ class_){
     }
 
     class_nodes[class_node_index].method_count = method_count;
-    class_nodes[class_node_index].method_nodes = 
-        (method_node*) malloc(method_count * sizeof(method_node));
+    class_nodes[class_node_index].method_nodes = new method_node[method_count];
 
     // b. Fullfill each method
     int method_index = 0;
@@ -345,8 +393,7 @@ void fullfill_class(int class_node_index, Class_ class_){
         }
 
         method_node_ptr->formal_count = formal_count;
-        method_node_ptr->formals = 
-            (formal_node*)malloc(formal_count * sizeof(formal_node));
+        method_node_ptr->formals = new formal_node[formal_count];
         
         // Fullfill each formal
         for (int formal_index = 0; 
@@ -420,7 +467,7 @@ void program_class::semant()
 
     // +5 :Object, Bool, Int, Str and IO
     classes_number = classes->len() + 5;
-    class_nodes = (class_node *)malloc(classes_number * sizeof(class_node));
+    class_nodes = new class_node[classes_number];
     init_class_nodes();
 
     // 1. Find all classess
@@ -435,8 +482,8 @@ void program_class::semant()
  
         // Should not inherit from self
         if (class_nodes[i + 5].name == class_nodes[i + 5].parent){
-            cerr << "Inherits from itself" << endl;
-            classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));
+            semant_error(classes->nth(i)->get_filename(), classes->nth(i)) 
+                << "inherits from itself" << endl;
             exit(1);
         }
     }
@@ -451,12 +498,13 @@ void program_class::semant()
         int class_index = i;
         class_nodes[class_nodes_index].visit_flag = flag;
         while (true){
-            int next_index = find_symbol(classes_number, class_nodes[class_nodes_index].parent);
+            int next_index = find_symbol(class_nodes[class_nodes_index].parent);
             class_nodes[class_nodes_index].parent_index = next_index;
 
             if (next_index < 0){
-                cerr << "parent class not find" << endl;
-                classtable->semant_error(classes->nth(class_index)->get_filename(), classes->nth(class_index));
+                semant_error(classes->nth(class_index)->get_filename(), classes->nth(class_index)) 
+                    << "parent class not find" << endl;
+                
                 exit(1);
             } 
             if (next_index < 5){  // Object, Bool, Int, Str, IO
@@ -465,8 +513,8 @@ void program_class::semant()
 
             // found a cycle
             if (class_nodes[next_index].visit_flag == flag){
-                cerr <<  "find a cycle in inherit graph" << endl;
-                classtable->semant_error(classes->nth(i)->get_filename(), classes->nth(i));  // Here, use 'i' is OK
+                semant_error(classes->nth(i)->get_filename(), classes->nth(i)) 
+                    << "find a cycle in inherit graph" << endl;  // Here, use 'i' is OK
                 exit(1);
             }
 
@@ -490,7 +538,7 @@ void program_class::semant()
 
     // 4. Generate method environment
     classtable->install_basic_classes_public();
-    
+
     for (int class_index = classes->first(); 
             classes->more(class_index); 
             class_index = classes->next(class_index)){
@@ -500,10 +548,41 @@ void program_class::semant()
     debug_print_methods();
     debug_count();
 
+    // 5. type checking and type assignment
+    SymbolTable<Symbol, Entry> *obj_env = new SymbolTable<Symbol, Entry>();
+    for (int class_node_index = 5; class_node_index < classes_number; class_node_index++){
+        obj_env->enterscope();
+        Class_ class_ = classes->nth(class_node_index - 5);
+        Features features = class_->get_features();
 
-    exit(1); // TODO: delete it!
+        // a. Fetch all features
+        for (int feature_index = features->first(); 
+                features->more(feature_index);
+                feature_index = features->next(feature_index)){
+            Feature feature = features->nth(feature_index);
+            if (feature->get_type() != TYPE_ATTR){
+                continue;
+            }
 
-    if (classtable->errors()) {
+            obj_env->addid(feature->get_name(), feature->get_type_decl());
+        }
+
+        if (semant_debug){
+            cerr << "class: " << class_->get_name();
+            obj_env->dump();
+            cerr << endl;
+        }
+
+        obj_env->exitscope();
+    }
+
+    
+
+    
+
+    exit(1); // TODO: delete it!!!!!!!!!!!!!!!
+
+    if (error_count) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;
 	    exit(1);
     }

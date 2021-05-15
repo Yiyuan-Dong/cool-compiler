@@ -15,6 +15,12 @@
 #define TYPE_METHOD (0)
 #define TYPE_ATTR   (1)
 
+// PA4 declares
+int find_symbol(int, int);
+bool check_parent(int, int);
+int LCA(int, int);
+Symbol fetch_class_name(int);
+ostream& semant_error(Symbol, tree_node *);
 
 // define the class for phylum
 // define simple phylum - Program
@@ -64,6 +70,7 @@ public:
    virtual Symbol get_name() = 0;
    virtual Symbol get_return_type() = 0;
    virtual Symbol get_type_decl() = 0;
+   virtual bool type_check() = 0;
 
 #ifdef Feature_EXTRAS
    Feature_EXTRAS
@@ -96,6 +103,9 @@ class Expression_class : public tree_node {
 public:
    tree_node *copy()		 { return copy_Expression(); }
    virtual Expression copy_Expression() = 0;
+
+   // PA4
+   bool is_no_expr(){ return false; }
 
 #ifdef Expression_EXTRAS
    Expression_EXTRAS
@@ -218,6 +228,9 @@ public:
    Symbol get_name(){ return name; }
    Symbol get_return_type(){ return return_type; }
    Symbol get_type_decl(){ return NULL; }
+   bool type_check(){
+      return false;
+   }
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -249,6 +262,9 @@ public:
    Symbol get_name(){ return name; }
    Symbol get_return_type(){ return NULL; }
    Symbol get_type_decl(){ return type_decl; }
+   bool type_check(){
+
+   }
 
 #ifdef Feature_SHARED_EXTRAS
    Feature_SHARED_EXTRAS
@@ -797,6 +813,7 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool is_no_expr() { return true; }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
