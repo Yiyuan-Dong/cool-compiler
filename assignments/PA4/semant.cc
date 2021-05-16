@@ -19,7 +19,7 @@ extern char *curr_filename;
 // as fixed names used by the runtime system.
 //
 //////////////////////////////////////////////////////////////////////
-static Symbol 
+Symbol 
     arg,
     arg2,
     Bool,
@@ -266,6 +266,7 @@ typedef struct {
     int depth;
     method_node* method_nodes;
     int method_count;
+    Class_ class_;
 } class_node;
 
 // Important
@@ -303,6 +304,29 @@ int find_symbol(Symbol target) {
     }
 
     return -1;
+}
+
+bool is_SELF_TYPE(Symbol candidate){
+    return candidate->equal_string(SELF_TYPE->get_string(), SELF_TYPE->get_len());
+}
+
+bool check_subtype(Symbol child, Symbol parent, Class_ class_){
+    assert(child);
+    assert(parent);
+
+    if (is_SELF_TYPE(parent)){
+        return is_SELF_TYPE(child);
+    }
+    if (is_SELF_TYPE(child)){
+        child = class_->get_name();
+    }
+    
+    int child_index  = find_symbol(child);
+    child_index = child_index < 0 ? 0 : child_index;
+    int parent_index = find_symbol(parent); 
+    parent_index = parent_index < 0 ? 0 : parent_index;
+
+    return check_parent(child_index, parent_index);
 }
 
 bool check_parent(int child_index, int parent_index){
@@ -352,6 +376,7 @@ int get_depth(int node_index){
 
 void fullfill_class(int class_node_index, Class_ class_){
     Features features = class_->get_features();
+    class_nodes[class_node_index].class_ = class_;
 
     //   a. Count how many methods are there for each class
     int method_count = 0;
@@ -500,11 +525,17 @@ void program_class::semant()
         while (true){
             int next_index = find_symbol(class_nodes[class_nodes_index].parent);
             class_nodes[class_nodes_index].parent_index = next_index;
+            // Should not inherits from Int, Bool or String
+            if (class_nodes[class_nodes_index].parent_index <= 3 && 
+                class_nodes[class_nodes_index].parent_index >= 1){
+                semant_error(classes->nth(class_index)->get_filename(), classes->nth(class_index))
+                    << "Should not inherit from Int, Bool or String" << endl;
+                exit(1);
+            }
 
             if (next_index < 0){
                 semant_error(classes->nth(class_index)->get_filename(), classes->nth(class_index)) 
                     << "parent class not find" << endl;
-                
                 exit(1);
             } 
             if (next_index < 5){  // Object, Bool, Int, Str, IO
@@ -552,19 +583,48 @@ void program_class::semant()
     SymbolTable<Symbol, Entry> *obj_env = new SymbolTable<Symbol, Entry>();
     for (int class_node_index = 5; class_node_index < classes_number; class_node_index++){
         obj_env->enterscope();
-        Class_ class_ = classes->nth(class_node_index - 5);
-        Features features = class_->get_features();
 
-        // a. Fetch all features
+        // add [self/SELF_TYPE]
+        obj_env->addid(self, SELF_TYPE);
+        // a. Fetch all features, including parents'
+        for (int temp_index = class_node_index;
+                temp_index >= 0;
+                temp_index = class_nodes[temp_index].parent_index){
+            
+            Class_ class_ = class_nodes[temp_index].class_;
+            Features features = class_->get_features();
+
+            for (int feature_index = features->first(); 
+                    features->more(feature_index);
+                    feature_index = features->next(feature_index)){
+                Feature feature = features->nth(feature_index);
+                if (feature->get_type() != TYPE_ATTR){
+                    continue;
+                }
+
+                if (obj_env->lookup(feature->get_name()) != NULL){
+                    semant_error(class_->get_filename(), feature) << "Redifine attr: " 
+                    << feature->get_name() << endl;
+                } else {
+                    if (find_symbol(feature->get_type_decl()) < 0){
+                        semant_error(class_->get_filename(), feature) << "Unknwon declared type: " 
+                        << feature->get_type_decl() << endl;
+                        obj_env->addid(feature->get_name(), Object);
+                    } else {
+                        obj_env->addid(feature->get_name(), feature->get_type_decl());
+                    }
+                }
+            }
+        }
+
+        // b. Check all attrs and methods
+        Class_ class_ = class_nodes[class_node_index].class_;
+        Features features = class_->get_features();
         for (int feature_index = features->first(); 
                 features->more(feature_index);
                 feature_index = features->next(feature_index)){
             Feature feature = features->nth(feature_index);
-            if (feature->get_type() != TYPE_ATTR){
-                continue;
-            }
-
-            obj_env->addid(feature->get_name(), feature->get_type_decl());
+            feature->type_check(class_, obj_env);
         }
 
         if (semant_debug){
@@ -576,11 +636,8 @@ void program_class::semant()
         obj_env->exitscope();
     }
 
-    
-
-    
-
-    exit(1); // TODO: delete it!!!!!!!!!!!!!!!
+    cerr << "finish!" << endl;
+    exit(1); // delete it!
 
     if (error_count) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;

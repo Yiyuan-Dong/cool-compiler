@@ -11,16 +11,50 @@
 
 #include "tree.h"
 #include "cool-tree.handcode.h"
+#include "symtab.h"
 
 #define TYPE_METHOD (0)
 #define TYPE_ATTR   (1)
 
 // PA4 declares
-int find_symbol(int, int);
+int find_symbol(Symbol);
 bool check_parent(int, int);
 int LCA(int, int);
 Symbol fetch_class_name(int);
 ostream& semant_error(Symbol, tree_node *);
+typedef SymbolTable<Symbol, Entry> *SymTbl;
+bool check_subtype(Symbol, Symbol, Class_);
+
+#define SEMANT_ERROR (semant_error(class_->get_filename(), this))
+
+extern Symbol 
+    arg,
+    arg2,
+    Bool,
+    concat,
+    cool_abort,
+    copy,
+    Int,
+    in_int,
+    in_string,
+    IO,
+    length,
+    Main,
+    main_meth,
+    No_class,
+    No_type,
+    Object,
+    out_int,
+    out_string,
+    prim_slot,
+    self,
+    SELF_TYPE,
+    Str,
+    str_field,
+    substr,
+    type_name,
+    val;
+
 
 // define the class for phylum
 // define simple phylum - Program
@@ -70,7 +104,7 @@ public:
    virtual Symbol get_name() = 0;
    virtual Symbol get_return_type() = 0;
    virtual Symbol get_type_decl() = 0;
-   virtual bool type_check() = 0;
+   virtual bool type_check(Class_ class_, SymTbl obj_env) = 0;
 
 #ifdef Feature_EXTRAS
    Feature_EXTRAS
@@ -105,7 +139,10 @@ public:
    virtual Expression copy_Expression() = 0;
 
    // PA4
-   bool is_no_expr(){ return false; }
+   virtual bool is_no_expr(){ return false; }
+   virtual bool type_check_and_set(Class_ class_, SymTbl obj_env) {
+      return false;
+   }
 
 #ifdef Expression_EXTRAS
    Expression_EXTRAS
@@ -228,7 +265,7 @@ public:
    Symbol get_name(){ return name; }
    Symbol get_return_type(){ return return_type; }
    Symbol get_type_decl(){ return NULL; }
-   bool type_check(){
+   bool type_check(Class_ class_, SymTbl obj_env){
       return false;
    }
 
@@ -262,8 +299,23 @@ public:
    Symbol get_name(){ return name; }
    Symbol get_return_type(){ return NULL; }
    Symbol get_type_decl(){ return type_decl; }
-   bool type_check(){
+   bool type_check(Class_ class_, SymTbl obj_env){
+      if (init->is_no_expr()){
+         return true;
+      }
 
+      // `type_decl` is checked when constructing `obj_env`
+
+      init->type_check_and_set(class_, obj_env);
+      
+      Symbol init_type = init->get_type();
+
+      bool check_ret = check_subtype(init_type, type_decl, class_);
+      if (!check_ret){
+         SEMANT_ERROR << "attr initialied with wrong type! expected: " 
+            << type_decl->get_string() << ", get: " << init_type->get_string() << endl;
+      }
+      return check_ret;  
    }
 
 #ifdef Feature_SHARED_EXTRAS
@@ -796,6 +848,12 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
 
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      assert(!e1->is_no_expr());
+      set_type(Bool);
+      return true;
+   }
+
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
 #endif
@@ -814,6 +872,9 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
    bool is_no_expr() { return true; }
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -834,6 +895,18 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      Symbol type = obj_env->lookup(name);
+      if (!type){
+         SEMANT_ERROR << "Unknown object:" << name->get_string() << endl;
+         set_type(Object);
+         return false;
+      } else {
+         set_type(type);
+         return true;
+      }
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
