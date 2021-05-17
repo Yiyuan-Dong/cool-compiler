@@ -244,28 +244,6 @@ ostream& ClassTable::semant_error()
      errors. Part 2) can be done in a second stage, when you want
      to build mycoolc.
  */
-typedef struct {
-    Symbol name;
-    Symbol type_decl; 
-} formal_node;
-
-typedef struct {
-    formal_node* formals;
-    int formal_count;
-    Symbol return_type;
-    Symbol name;
-} method_node;
-
-typedef struct {
-    int visit_flag;
-    Symbol name;
-    Symbol parent;
-    int parent_index;
-    int depth;
-    method_node* method_nodes;
-    int method_count;
-    Class_ class_;
-} class_node;
 
 // Important
 static class_node *class_nodes;  // Each class (including Object, IO, etc.) corresponding to a class 
@@ -319,8 +297,8 @@ bool is_SELF_TYPE(Symbol candidate){
     return is_same_type(candidate, SELF_TYPE);
 }
 
-method_node* find_method(Symbol method_name, Class_ class_){
-    int class_index = find_symbol(class_->get_name());
+method_node* find_method(Symbol method_name, Symbol type){
+    int class_index = find_symbol(type);
     assert(class_index >= 0);
 
     while (class_index >= 0){
@@ -336,9 +314,6 @@ method_node* find_method(Symbol method_name, Class_ class_){
     return NULL;
 }
 
-bool check_method(){
-    
-}
 
 bool check_subtype(Symbol child, Symbol parent, Class_ class_){
     assert(child);

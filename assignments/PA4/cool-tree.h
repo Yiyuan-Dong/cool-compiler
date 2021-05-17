@@ -17,6 +17,30 @@
 #define TYPE_ATTR   (1)
 
 // PA4 declares
+
+typedef struct {
+    Symbol name;
+    Symbol type_decl; 
+} formal_node;
+
+typedef struct {
+    formal_node* formals;
+    int formal_count;
+    Symbol return_type;
+    Symbol name;
+} method_node;
+
+typedef struct {
+    int visit_flag;
+    Symbol name;
+    Symbol parent;
+    int parent_index;
+    int depth;
+    method_node* method_nodes;
+    int method_count;
+    Class_ class_;
+} class_node;
+
 int find_symbol(Symbol);
 bool check_parent(int, int);
 Symbol LCA(Symbol, Symbol);
@@ -26,6 +50,7 @@ typedef SymbolTable<Symbol, Entry> *SymTbl;
 bool check_subtype(Symbol, Symbol, Class_);
 bool is_SELF_TYPE(Symbol);
 bool is_same_type(Symbol a, Symbol b);
+method_node* find_method(Symbol , Symbol);
 
 #define SEMANT_ERROR (semant_error(class_->get_filename(), this))
 
@@ -56,7 +81,6 @@ extern Symbol
     substr,
     type_name,
     val;
-
 
 // define the class for phylum
 // define simple phylum - Program
@@ -319,8 +343,8 @@ public:
 
       bool check_ret = check_subtype(init_type, type_decl, class_);
       if (!check_ret){
-         SEMANT_ERROR << "attr initialied with wrong type! expected: " 
-            << type_decl->get_string() << ", get: " << init_type->get_string() << endl;
+         SEMANT_ERROR << "expression type: " << init->get_type()->get_string() <<
+            "is not subtype of declared type: " << type_decl << endl;
       }
       return check_ret;  
    }
@@ -497,7 +521,67 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      // initialize subexpressions
+      expr->type_check_and_set(class_, obj_env);
+      for (int expr_index = actual->first();
+         actual->more(expr_index);
+         expr_index = actual->next(expr_index)){
+         actual->nth(expr_index)->type_check_and_set(class_, obj_env);
+      }
 
+      // find that method
+      method_node* method_ptr;
+      if (is_same_type(expr->get_type(), SELF_TYPE)){
+         method_ptr = find_method(name, class_->get_name());
+      } else {
+         method_ptr = find_method(name, expr->get_type());
+      }
+
+      // check entire method
+      if (method_ptr == NULL){
+         SEMANT_ERROR << "Unknwon method: " << name->get_string() << endl; 
+         set_type(Object);
+         return false;
+      }
+
+      if (method_ptr->formal_count != actual->len()){
+         SEMANT_ERROR << "In method " << name->get_string() <<
+            "for type" << class_->get_name() <<
+            "expected" << method_ptr->formal_count <<
+            "args, but get" << actual->len() << "args" << endl;
+         set_type(Object);
+         return false;
+      }
+
+      // check each arg
+      bool flag = true;
+      for (int expr_index = actual->first();
+         actual->more(expr_index);
+         expr_index = actual->next(expr_index)){
+         if (!check_subtype(
+               actual->nth(expr_index)->get_type(),
+               method_ptr->formals[expr_index].type_decl, 
+               class_)
+         ){
+            flag = false;
+            SEMANT_ERROR << "In method" << name->get_string() <<
+               "'s [" << expr_index << "] arg" << 
+               "the current type" << actual->nth(expr_index)->get_type()->get_string() <<
+               "is not subtype of " << method_ptr->formals[expr_index].type_decl << endl;
+            set_type(Object);
+         }
+      }
+
+      if (flag){
+         if (is_same_type(method_ptr->return_type, SELF_TYPE)){
+            set_type(expr->get_type());
+         } else {
+            set_type(method_ptr->return_type);
+         }
+         return true;
+      }      
+
+      return false;
    }
 
 #ifdef Expression_SHARED_EXTRAS
@@ -683,7 +767,9 @@ public:
    void dump(ostream& stream, int n);
 
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
-      init->type_check_and_set(class_, obj_env);
+      if (!init->is_no_expr()){
+         init->type_check_and_set(class_, obj_env);
+      }
       
       obj_env->enterscope();
 
@@ -697,7 +783,10 @@ public:
       } 
       // Check if `init` return a subtype of `type_decl`
       else {
-         if (!check_subtype(init->get_type(), type_decl, class_)){
+         if (!init->is_no_expr() && 
+            !check_subtype(init->get_type(), type_decl, class_)){
+            SEMANT_ERROR << "expression type: " << init->get_type()->get_string() <<
+               "is not subtype of declared type: " << type_decl->get_string() << endl;
             obj_env->addid(identifier, Object);
          } else {
             obj_env->addid(identifier, type_decl);
