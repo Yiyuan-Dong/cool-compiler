@@ -54,6 +54,8 @@ method_node* find_method(Symbol , Symbol);
 
 #define SEMANT_ERROR (semant_error(class_->get_filename(), this))
 
+extern int semant_debug;
+
 extern Symbol 
     arg,
     arg2,
@@ -149,6 +151,7 @@ public:
    // PA4
    virtual Symbol get_name() = 0;
    virtual Symbol get_type_decl() = 0;
+   virtual void add_var(Class_ class_, SymTbl obj_env) = 0;
 
 #ifdef Formal_EXTRAS
    Formal_EXTRAS
@@ -166,9 +169,7 @@ public:
 
    // PA4
    virtual bool is_no_expr(){ return false; }
-   virtual bool type_check_and_set(Class_ class_, SymTbl obj_env) {
-      return false;
-   }
+   virtual bool type_check_and_set(Class_ class_, SymTbl obj_env) = 0;
 
 #ifdef Expression_EXTRAS
    Expression_EXTRAS
@@ -297,7 +298,29 @@ public:
    Symbol get_return_type(){ return return_type; }
    Symbol get_type_decl(){ return NULL; }
    bool type_check(Class_ class_, SymTbl obj_env){
-      return false;
+      if (semant_debug){
+         cerr << "method " << name->get_string() <<  endl;
+      }
+
+      obj_env->enterscope();
+
+      for (int i = formals->first();
+         formals->more(i); 
+         i = formals->next(i)){
+         formals->nth(i)->add_var(class_, obj_env);
+      }
+
+      expr->type_check_and_set(class_, obj_env);
+
+      bool flag = check_subtype(expr->get_type(), return_type, class_);
+      if (!flag){
+         SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
+            "is not subtype of return type: " << return_type << endl;
+      }
+
+      obj_env->exitscope();
+
+      return flag;
    }
 
 #ifdef Feature_SHARED_EXTRAS
@@ -331,6 +354,11 @@ public:
    Symbol get_return_type(){ return NULL; }
    Symbol get_type_decl(){ return type_decl; }
    bool type_check(Class_ class_, SymTbl obj_env){
+      // [self/SELF_TYPE] has been added in semant.cc
+      if (semant_debug){
+         cerr << "attr " << name->get_string() <<  endl;
+      }
+
       if (init->is_no_expr()){
          return true;
       }
@@ -374,6 +402,19 @@ public:
    // PA4
    Symbol get_name(){ return name; }
    Symbol get_type_decl(){ return type_decl; }
+   void add_var(Class_ class_, SymTbl obj_env){
+      if (obj_env->lookup(name)){
+         SEMANT_ERROR << "arg" << name->get_string() << "is redefined" << endl;
+         return;
+      }
+
+      if (is_same_type(type_decl, SELF_TYPE)){
+         SEMANT_ERROR << "Method args should not use SELF_TYPE" << endl;
+         obj_env->addid(name, Object);
+      } else {
+         obj_env->addid(name, type_decl);
+      }
+   }
 
 #ifdef Formal_SHARED_EXTRAS
    Formal_SHARED_EXTRAS
@@ -496,6 +537,77 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      // initialize subexpressions
+      expr->type_check_and_set(class_, obj_env);
+      for (int expr_index = actual->first();
+         actual->more(expr_index);
+         expr_index = actual->next(expr_index)){
+         actual->nth(expr_index)->type_check_and_set(class_, obj_env);
+      }
+
+      if (is_same_type(type_name, SELF_TYPE)){
+         SEMANT_ERROR << "static dispatch should not use SELF_TYPE" << endl;
+         set_type(Object);
+         return false;
+      }
+
+      if (!check_subtype(expr->get_type(), type_name, class_)){
+         SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
+            "is not subtype of static dispatch type: " << type_name << endl;
+         set_type(Object);
+         return false;
+      }
+
+      // find that method
+      method_node* method_ptr = find_method(name, type_name);
+
+      // check entire method
+      if (method_ptr == NULL){
+         SEMANT_ERROR << "Unknwon method: " << name->get_string() << endl; 
+         set_type(Object);
+         return false;
+      }
+
+      if (method_ptr->formal_count != actual->len()){
+         SEMANT_ERROR << "In method " << name->get_string() <<
+            "for type" << class_->get_name() <<
+            "expected" << method_ptr->formal_count <<
+            "args, but get" << actual->len() << "args" << endl;
+         set_type(Object);
+         return false;
+      }
+
+      // check each arg
+      bool flag = true;
+      for (int expr_index = actual->first();
+         actual->more(expr_index);
+         expr_index = actual->next(expr_index)){
+         if (!check_subtype(
+               actual->nth(expr_index)->get_type(),
+               method_ptr->formals[expr_index].type_decl, 
+               class_)
+         ){
+            flag = false;
+            SEMANT_ERROR << "In method" << name->get_string() <<
+               "'s [" << expr_index << "] arg" << 
+               "the current type" << actual->nth(expr_index)->get_type()->get_string() <<
+               "is not subtype of " << method_ptr->formals[expr_index].type_decl << endl;
+            set_type(Object);
+         }
+      }
+
+      if (flag){
+         if (is_same_type(method_ptr->return_type, SELF_TYPE)){
+            set_type(expr->get_type());
+         } else {
+            set_type(method_ptr->return_type);
+         }
+         return true;
+      }      
+
+      return false;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS

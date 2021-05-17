@@ -302,13 +302,17 @@ method_node* find_method(Symbol method_name, Symbol type){
     assert(class_index >= 0);
 
     while (class_index >= 0){
-        class_node *class_ptr = class_nodes+class_index;
-        for (int method_index = 0; method_index < class_ptr->method_count; method_index++){
-            method_node *method_ptr = class_ptr->method_nodes + method_index;
+        class_node *class_node_ptr = class_nodes + class_index;
+
+        for (int method_index = 0; method_index < class_node_ptr->method_count; method_index++){
+            method_node *method_ptr = class_node_ptr->method_nodes + method_index;
+
             if (is_same_type(method_ptr->name, method_name)){
                 return method_ptr;
             }
         }
+
+        class_index = class_node_ptr->parent_index;
     }
 
     return NULL;
@@ -413,7 +417,24 @@ void fullfill_class(int class_node_index, Class_ class_){
         if (feature->get_type() == TYPE_ATTR){
             continue;
         }
-        
+
+        bool check_dup = false;
+        for (int another_index = features->first(); 
+            another_index < method_index;
+            another_index = features->next(another_index)){
+            if (features->nth(another_index)->get_type() == TYPE_METHOD && 
+                is_same_type(feature->get_name(), features->nth(another_index)->get_name())){
+                semant_error(class_->get_filename(), class_) 
+                    << "method" << feature->get_name()->get_string() << "si duplicated defined" << endl;
+                check_dup = true;
+            }
+        }
+
+        if (check_dup){
+            class_nodes[class_node_index].method_count--;
+            continue;
+        }
+
         method_node *method_node_ptr = class_nodes[class_node_index].method_nodes + method_index;
         method_node_ptr->name = feature->get_name();
         method_node_ptr->return_type = feature->get_return_type();
@@ -442,6 +463,52 @@ void fullfill_class(int class_node_index, Class_ class_){
         }
 
         method_index++;
+    }
+}
+
+void check_method_inherits(int class_node_index){
+    class_node *class_node_ptr = class_nodes + class_node_index;
+    Class_ class_ = class_node_ptr->class_;
+
+    for (int i = 0; i < class_node_ptr->method_count; i++){
+        method_node *my_method_ptr = class_node_ptr->method_nodes + i;
+
+        int parent_index = class_node_ptr->parent_index;
+        while (parent_index >= 0){
+            class_node *parent_node_ptr = class_nodes + parent_index;
+
+            for (int j = 0; j < parent_node_ptr->method_count; j++){
+                method_node *method_node_ptr = parent_node_ptr->method_nodes + j;
+
+                if (is_same_type(method_node_ptr->name, my_method_ptr->name)){
+                    bool wrong = false;
+
+                    if (!is_same_type(method_node_ptr->return_type, my_method_ptr->return_type)){
+                        wrong = true;
+                    }
+                    if (method_node_ptr->formal_count != my_method_ptr->formal_count){
+                        wrong = true;
+                    } else {
+                        for (int k = 0; k < method_node_ptr->formal_count; k++){
+                            formal_node *formal_node_ptr = method_node_ptr->formals + k;
+                            formal_node *my_formal_ptr = my_method_ptr->formals + k;
+
+                            if (!is_same_type(formal_node_ptr->type_decl, my_formal_ptr->type_decl)){
+                                wrong = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (wrong){
+                        semant_error(class_->get_filename(), class_) << "method: " <<
+                            my_method_ptr->name->get_string() << " signature changed" << endl;
+                    }
+                }
+            }
+
+            parent_index = parent_node_ptr->parent_index;
+        }
     }
 }
 
@@ -588,6 +655,13 @@ void program_class::semant()
 
     debug_print_methods();
     debug_count();
+
+    // 4.b check method inherits
+    for (int class_index = classes->first(); 
+            classes->more(class_index); 
+            class_index = classes->next(class_index)){
+        check_method_inherits(class_index + 5);
+    }
 
     // 5. type checking and type assignment
     SymbolTable<Symbol, Entry> *obj_env = new SymbolTable<Symbol, Entry>();
