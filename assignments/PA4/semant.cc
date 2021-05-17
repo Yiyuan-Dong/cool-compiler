@@ -1,5 +1,3 @@
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -296,9 +294,18 @@ Symbol fetch_class_name(int class_node_index){
     return class_nodes[class_node_index].name;
 }
 
+bool is_same_type(Symbol a, Symbol b){
+    assert(a);
+    assert(b);
+
+    return a->equal_string(b->get_string(), b->get_len());
+}
+
 int find_symbol(Symbol target) {
+    assert(target);
+
     for (int i = 0; i < classes_number; i++) {
-        if (class_nodes[i].name->equal_string(target->get_string(), target->get_len())){
+        if (is_same_type(class_nodes[i].name, target)){
             return i;
         }
     }
@@ -307,12 +314,15 @@ int find_symbol(Symbol target) {
 }
 
 bool is_SELF_TYPE(Symbol candidate){
-    return candidate->equal_string(SELF_TYPE->get_string(), SELF_TYPE->get_len());
+    assert(candidate);
+
+    return is_same_type(candidate, SELF_TYPE);
 }
 
 bool check_subtype(Symbol child, Symbol parent, Class_ class_){
     assert(child);
     assert(parent);
+    assert(class_);
 
     if (is_SELF_TYPE(parent)){
         return is_SELF_TYPE(child);

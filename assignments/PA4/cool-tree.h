@@ -24,6 +24,8 @@ Symbol fetch_class_name(int);
 ostream& semant_error(Symbol, tree_node *);
 typedef SymbolTable<Symbol, Entry> *SymTbl;
 bool check_subtype(Symbol, Symbol, Class_);
+bool is_SELF_TYPE(Symbol);
+bool is_same_type(Symbol a, Symbol b);
 
 #define SEMANT_ERROR (semant_error(class_->get_filename(), this))
 
@@ -575,6 +577,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+      bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) ||
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect two Ints for `+`" << endl;
+         return false;
+      }
+
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -597,6 +613,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) ||
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect two Ints for `-`" << endl;
+         return false;
+      }
+
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -619,6 +649,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) ||
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect two Ints for `*`" << endl;
+         return false;
+      }
+
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -641,6 +685,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) ||
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect two Ints for `/`" << endl;
+         return false;
+      }
+
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -661,6 +719,18 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect type Int for `~`" << endl;
+         return false;
+      }
+
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -683,6 +753,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) || 
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect Int for `<`" << endl;
+         return false;
+      }
+
+      set_type(Bool);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -705,6 +789,26 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (is_same_type(e1->get_type(), Int) ||
+            is_same_type(e1->get_type(), Str) || 
+            is_same_type(e1->get_type(), Bool) || 
+            is_same_type(e2->get_type(), Int) || 
+            is_same_type(e2->get_type(), Bool) ||
+            is_same_type(e2->get_type(), Str)){
+         if (!is_same_type(e1->get_type(), e2->get_type())){
+            set_type(Object);
+            SEMANT_ERROR << "Expect same type for `=` if one type is Int, Bool or Str" << endl;
+            return false;
+         }
+      }
+
+      set_type(Bool);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -727,6 +831,20 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+      e2->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(e1->get_type(), Int) || 
+            !is_same_type(e2->get_type(), Int)){
+         set_type(Object);
+         SEMANT_ERROR << "Expect Int for `<=`" << endl;
+         return false;
+      }
+
+      set_type(Bool);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -747,6 +865,17 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      e1->type_check_and_set(class_, obj_env);
+
+      if (is_same_type(e1->get_type(), Bool)){
+         set_type(Bool);
+         return true;
+      } else {
+         set_type(Object);
+         return false;
+      }
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -767,6 +896,10 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      set_type(Int);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -787,6 +920,10 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      set_type(Bool);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -807,6 +944,10 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      set_type(Str);
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -827,6 +968,21 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      if (is_SELF_TYPE(type_name)){
+         set_type(SELF_TYPE);
+         return true;
+      }
+      if (find_symbol(type_name) < 0){
+         SEMANT_ERROR << "Unknwon Type: " << type_name->get_string() << endl;
+         set_type(Object);
+         return false;
+      } else {
+         set_type(type_name);
+         return true;
+      }
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -849,7 +1005,7 @@ public:
    void dump(ostream& stream, int n);
 
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
-      assert(!e1->is_no_expr());
+      e1->type_check_and_set(class_, obj_env);
       set_type(Bool);
       return true;
    }
