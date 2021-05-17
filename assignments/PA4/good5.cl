@@ -1,6 +1,6 @@
 Class A inherits Object {
     a : A;
-    b : B <- a;
+    b : B <- b;
     a () : A{
         self
     };
@@ -15,8 +15,10 @@ Class B inherits A{
     };
 };
 
-Class C inherits IO {
-
+Class C inherits B {
+    a(i : Int) : A{
+        b
+    };
 };
 
 Class Main{

@@ -19,7 +19,7 @@
 // PA4 declares
 int find_symbol(Symbol);
 bool check_parent(int, int);
-int LCA(int, int);
+Symbol LCA(Symbol, Symbol);
 Symbol fetch_class_name(int);
 ostream& semant_error(Symbol, tree_node *);
 typedef SymbolTable<Symbol, Entry> *SymTbl;
@@ -159,6 +159,11 @@ class Case_class : public tree_node {
 public:
    tree_node *copy()		 { return copy_Case(); }
    virtual Case copy_Case() = 0;
+
+   virtual Symbol get_name() = 0;
+   virtual Symbol get_type_decl() = 0;
+   virtual Expression get_expr() = 0;
+   virtual bool type_check_and_set(Class_, SymTbl) = 0;
 
 #ifdef Case_EXTRAS
    Case_EXTRAS
@@ -370,6 +375,36 @@ public:
    Case copy_Case();
    void dump(ostream& stream, int n);
 
+   Symbol get_name(){
+      return name;
+   }
+
+   Symbol get_type_decl(){
+      return type_decl;
+   }
+
+   Expression get_expr(){
+      return expr;
+   }
+
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      obj_env->enterscope();
+
+      if (!find_symbol(type_decl) < 0 &&
+         !is_same_type(type_decl, SELF_TYPE)){
+         SEMANT_ERROR << "Unknown declared type: " 
+            << type_decl->get_string() << endl;
+         obj_env->addid(name, Object);
+      } else {
+         obj_env->addid(name, type_decl);
+      }
+
+      expr->type_check_and_set(class_, obj_env);
+      obj_env->exitscope();
+
+      return true;
+   }
+
 #ifdef Case_SHARED_EXTRAS
    Case_SHARED_EXTRAS
 #endif
@@ -391,6 +426,26 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      expr->type_check_and_set(class_, obj_env);
+
+      Symbol type = obj_env->lookup(name);
+      if (!type){
+         SEMANT_ERROR << "Unknown object: " << name->get_string() << endl;
+         set_type(Object);
+         return false;
+      } else {
+         if (!check_subtype(expr->get_type(), type, class_)){
+            SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
+               "is not subtype of declared type: " << type->get_string() << endl;
+            set_type(Object);
+            return false;
+         } else {
+            set_type(type);
+            return true;
+         }
+      }
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -441,6 +496,9 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -465,6 +523,18 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      pred->type_check_and_set(class_, obj_env);
+      then_exp->type_check_and_set(class_, obj_env);
+      else_exp->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(pred->get_type(), Bool)){
+         SEMANT_ERROR << "Expect Bool for `If` pred" << endl;
+      }
+      set_type(LCA(then_exp->get_type(), else_exp->get_type()));
+
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -488,6 +558,20 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
 
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      pred->type_check_and_set(class_, obj_env);
+      body->type_check_and_set(class_, obj_env);
+
+      if (!is_same_type(pred->get_type(), Bool)){
+         SEMANT_ERROR << "Expect Bool for `Loop` pred" << endl;
+         set_type(Object);
+         return false;
+      } else {
+         set_type(Object);
+         return true;
+      }
+   }
+
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
 #endif
@@ -510,6 +594,35 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
 
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      expr->type_check_and_set(class_, obj_env);
+
+      for (int i = cases->first(); 
+         cases->more(i);
+         i = cases->next(i)){
+         cases->nth(i)->type_check_and_set(class_, obj_env);
+      }
+
+      Symbol final_type;
+      if (cases->len() == 1){
+         final_type = cases->nth(cases->first())->get_expr()->get_type();
+      } else {
+         int i = cases->first();
+         Symbol first_type = cases->nth(i)->get_expr()->get_type();
+         i = cases->next(i);
+         Symbol second_type = cases->nth(i)->get_expr()->get_type();
+         i = cases->next(i);
+
+         final_type = LCA(first_type, second_type);
+
+         for (; cases->more(i); i = cases->next(i)){
+            Symbol this_type = cases->nth(i)->get_expr()->get_type();
+            final_type = LCA(final_type, this_type);
+         }
+      }
+
+      return true;
+   }
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
 #endif
@@ -529,6 +642,19 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
+
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      for (int i = body->first();
+         body->more(i);
+         i = body->next(i)){
+
+         body->nth(i)->type_check_and_set(class_, obj_env);
+      }
+
+      int length = body->len();
+      set_type(body->nth(length - 1)->get_type());
+      return true;
+   }
 
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
@@ -556,6 +682,35 @@ public:
    Expression copy_Expression();
    void dump(ostream& stream, int n);
 
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
+      init->type_check_and_set(class_, obj_env);
+      
+      obj_env->enterscope();
+
+      // update obj_env
+      // Unknowm declared type
+      if (find_symbol(type_decl) < 0 && 
+         !is_same_type(type_decl, SELF_TYPE)){
+         SEMANT_ERROR << "Unknown declared type: " 
+            << type_decl->get_string() << endl;
+         obj_env->addid(identifier, Object);
+      } 
+      // Check if `init` return a subtype of `type_decl`
+      else {
+         if (!check_subtype(init->get_type(), type_decl, class_)){
+            obj_env->addid(identifier, Object);
+         } else {
+            obj_env->addid(identifier, type_decl);
+         }
+      }
+
+      body->type_check_and_set(class_, obj_env);
+      obj_env->exitscope();
+
+      set_type(body->get_type());
+      return true;
+   }
+
 #ifdef Expression_SHARED_EXTRAS
    Expression_SHARED_EXTRAS
 #endif
@@ -577,7 +732,7 @@ public:
    }
    Expression copy_Expression();
    void dump(ostream& stream, int n);
-      bool type_check_and_set(Class_ class_, SymTbl obj_env){
+   bool type_check_and_set(Class_ class_, SymTbl obj_env){
       e1->type_check_and_set(class_, obj_env);
       e2->type_check_and_set(class_, obj_env);
 

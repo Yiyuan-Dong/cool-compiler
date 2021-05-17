@@ -319,6 +319,27 @@ bool is_SELF_TYPE(Symbol candidate){
     return is_same_type(candidate, SELF_TYPE);
 }
 
+method_node* find_method(Symbol method_name, Class_ class_){
+    int class_index = find_symbol(class_->get_name());
+    assert(class_index >= 0);
+
+    while (class_index >= 0){
+        class_node *class_ptr = class_nodes+class_index;
+        for (int method_index = 0; method_index < class_ptr->method_count; method_index++){
+            method_node *method_ptr = class_ptr->method_nodes + method_index;
+            if (is_same_type(method_ptr->name, method_name)){
+                return method_ptr;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+bool check_method(){
+    
+}
+
 bool check_subtype(Symbol child, Symbol parent, Class_ class_){
     assert(child);
     assert(parent);
@@ -353,11 +374,15 @@ bool check_parent(int child_index, int parent_index){
     return temp_index == parent_index;
 }
 
-int LCA(int a_index, int b_index){
+Symbol LCA(Symbol a, Symbol b){
+    assert(a);
+    assert(b);
+
+    int a_index = find_symbol(a);
+    int b_index = find_symbol(b);
+
     assert(a_index >= 0);
-    assert(a_index < classes_number);
     assert(b_index >= 0);
-    assert(b_index < classes_number);
 
     while(class_nodes[a_index].depth < class_nodes[b_index].depth){
         a_index = class_nodes[a_index].parent_index;
@@ -371,7 +396,7 @@ int LCA(int a_index, int b_index){
         b_index = class_nodes[b_index].parent_index;
     }
 
-    return a_index;
+    return fetch_class_name(a_index);
 }
 
 
@@ -616,7 +641,9 @@ void program_class::semant()
                     semant_error(class_->get_filename(), feature) << "Redifine attr: " 
                     << feature->get_name() << endl;
                 } else {
-                    if (find_symbol(feature->get_type_decl()) < 0){
+                    if (find_symbol(feature->get_type_decl()) < 0 && 
+                        !is_same_type(feature->get_type_decl(), SELF_TYPE)){
+
                         semant_error(class_->get_filename(), feature) << "Unknwon declared type: " 
                         << feature->get_type_decl() << endl;
                         obj_env->addid(feature->get_name(), Object);
