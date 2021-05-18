@@ -471,13 +471,7 @@ void fullfill_class(int class_node_index, Class_ class_){
 
             formal_node_ptr->name = formal->get_name();
             Symbol type_decl = formal->get_type_decl();
-            if (find_symbol(type_decl) < 0){
-                semant_error(class_->get_filename(), formal) << 
-                    "Unknown type name: " << type_decl->get_string() << endl;
-                formal_node_ptr->type_decl = Object;
-            } else {
-                formal_node_ptr->type_decl = formal->get_type_decl();
-            }
+            formal_node_ptr->type_decl = formal->get_type_decl();
         }
 
         method_index++;

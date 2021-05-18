@@ -46,6 +46,10 @@ Class Main inherits A{
         5
     };
 
+    a3(s : SELF_TYPE) : A{
+        a
+    };
+
     main() : Object{
         {
             a1(1); -- error 

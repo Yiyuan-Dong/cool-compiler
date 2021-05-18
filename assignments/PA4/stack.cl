@@ -98,7 +98,6 @@ class Stack{
 					
 					a <- (new A2I).a2i(top.get_next().get_val());
 					b <- (new A2I).a2i(top.get_next().get_next().get_val());
-					(new IO).out_string((new A2I).i2a(a));
 					s <- a + b;
 					top <- top.get_next().get_next().get_next();
 					add((new A2I).i2a(s));
