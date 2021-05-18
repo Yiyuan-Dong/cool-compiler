@@ -332,8 +332,14 @@ bool check_subtype(Symbol child, Symbol parent, Class_ class_){
     }
     
     int child_index  = find_symbol(child);
+    if (semant_debug && child_index < 0){
+        cerr << "Warning: " << child->get_string() << "is not found" << endl;
+    }
     child_index = child_index < 0 ? 0 : child_index;
     int parent_index = find_symbol(parent); 
+    if (semant_debug && parent_index < 0){
+        cerr << "Warning: " << parent->get_string() << "is not found" << endl;
+    }
     parent_index = parent_index < 0 ? 0 : parent_index;
 
     return check_parent(child_index, parent_index);
@@ -425,7 +431,7 @@ void fullfill_class(int class_node_index, Class_ class_){
             if (features->nth(another_index)->get_type() == TYPE_METHOD && 
                 is_same_type(feature->get_name(), features->nth(another_index)->get_name())){
                 semant_error(class_->get_filename(), class_) 
-                    << "method" << feature->get_name()->get_string() << "si duplicated defined" << endl;
+                    << "method" << feature->get_name()->get_string() << "is duplicated defined" << endl;
                 check_dup = true;
             }
         }
@@ -459,7 +465,14 @@ void fullfill_class(int class_node_index, Class_ class_){
             formal_node *formal_node_ptr = method_node_ptr->formals + formal_index;
 
             formal_node_ptr->name = formal->get_name();
-            formal_node_ptr->type_decl = formal->get_type_decl();
+            Symbol type_decl = formal->get_type_decl();
+            if (find_symbol(type_decl) < 0){
+                semant_error(class_->get_filename(), class_) << 
+                    "Unknown type name: " << type_decl->get_string() << endl;
+                formal_node_ptr->type_decl = Object;
+            } else {
+                formal_node_ptr->type_decl = formal->get_type_decl();
+            }
         }
 
         method_index++;
@@ -670,7 +683,7 @@ void program_class::semant()
 
         // add [self/SELF_TYPE]
         obj_env->addid(self, SELF_TYPE);
-        // a. Fetch all features, including parents'
+        // a. Fetch all attrs, including parents'
         for (int temp_index = class_node_index;
                 temp_index >= 0;
                 temp_index = class_nodes[temp_index].parent_index){

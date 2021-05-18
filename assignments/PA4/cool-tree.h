@@ -299,7 +299,7 @@ public:
    Symbol get_type_decl(){ return NULL; }
    bool type_check(Class_ class_, SymTbl obj_env){
       if (semant_debug){
-         cerr << "method " << name->get_string() <<  endl;
+         cerr << "  method " << name->get_string() <<  endl;
       }
 
       obj_env->enterscope();
@@ -356,7 +356,7 @@ public:
    bool type_check(Class_ class_, SymTbl obj_env){
       // [self/SELF_TYPE] has been added in semant.cc
       if (semant_debug){
-         cerr << "attr " << name->get_string() <<  endl;
+         cerr << "  attr " << name->get_string() <<  endl;
       }
 
       if (init->is_no_expr()){
@@ -412,7 +412,12 @@ public:
          SEMANT_ERROR << "Method args should not use SELF_TYPE" << endl;
          obj_env->addid(name, Object);
       } else {
-         obj_env->addid(name, type_decl);
+         if (find_symbol(type_decl) < 0){
+            SEMANT_ERROR << "Unknown type: " << type_decl->get_string() << endl;
+            obj_env->addid(name, Object);
+         } else {
+            obj_env->addid(name, type_decl);  
+         }
       }
    }
 
@@ -455,13 +460,17 @@ public:
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
       obj_env->enterscope();
 
-      if (!find_symbol(type_decl) < 0 &&
-         !is_same_type(type_decl, SELF_TYPE)){
-         SEMANT_ERROR << "Unknown declared type: " 
-            << type_decl->get_string() << endl;
+      if (is_same_type(type_decl, SELF_TYPE)){
+         SEMANT_ERROR << "Can not use SELF_TYPE in branch" << endl;
          obj_env->addid(name, Object);
       } else {
-         obj_env->addid(name, type_decl);
+         if (!find_symbol(type_decl) < 0){
+            SEMANT_ERROR << "Unknown declared type: " 
+               << type_decl->get_string() << endl;
+            obj_env->addid(name, Object);
+         } else {
+            obj_env->addid(name, type_decl);
+         }
       }
 
       expr->type_check_and_set(class_, obj_env);
@@ -552,9 +561,15 @@ public:
          return false;
       }
 
+      if (find_symbol(type_name)){
+         SEMANT_ERROR << "Unknown dispatch type: " << type_name->get_string() << endl;
+         set_type(Object);
+         return false; 
+      }
+
       if (!check_subtype(expr->get_type(), type_name, class_)){
          SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
-            "is not subtype of static dispatch type: " << type_name << endl;
+            "is not subtype of static dispatch type: " << type_name->get_string() << endl;
          set_type(Object);
          return false;
       }
@@ -586,13 +601,13 @@ public:
          if (!check_subtype(
                actual->nth(expr_index)->get_type(),
                method_ptr->formals[expr_index].type_decl, 
-               class_)
-         ){
+               class_))
+         {
             flag = false;
             SEMANT_ERROR << "In method" << name->get_string() <<
                "'s [" << expr_index << "] arg" << 
                "the current type" << actual->nth(expr_index)->get_type()->get_string() <<
-               "is not subtype of " << method_ptr->formals[expr_index].type_decl << endl;
+               "is not subtype of " << method_ptr->formals[expr_index].type_decl->get_string() << endl;
             set_type(Object);
          }
       }
@@ -817,6 +832,8 @@ public:
          }
       }
 
+      set_type(final_type);
+
       return true;
    }
 #ifdef Expression_SHARED_EXTRAS
@@ -885,8 +902,8 @@ public:
       
       obj_env->enterscope();
 
-      // update obj_env
-      // Unknowm declared type
+      // Update obj_env
+      // Can use `SELF_TYPE` in let, so only consider unknown
       if (find_symbol(type_decl) < 0 && 
          !is_same_type(type_decl, SELF_TYPE)){
          SEMANT_ERROR << "Unknown declared type: " 
