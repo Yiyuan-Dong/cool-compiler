@@ -28,6 +28,7 @@ typedef struct {
     int formal_count;
     Symbol return_type;
     Symbol name;
+    Feature method;
 } method_node;
 
 typedef struct {
@@ -298,10 +299,6 @@ public:
    Symbol get_return_type(){ return return_type; }
    Symbol get_type_decl(){ return NULL; }
    bool type_check(Class_ class_, SymTbl obj_env){
-      if (semant_debug){
-         cerr << "  method " << name->get_string() <<  endl;
-      }
-
       obj_env->enterscope();
 
       for (int i = formals->first();
@@ -315,7 +312,7 @@ public:
       bool flag = check_subtype(expr->get_type(), return_type, class_);
       if (!flag){
          SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
-            "is not subtype of return type: " << return_type << endl;
+            " is not subtype of return type: " << return_type << endl;
       }
 
       obj_env->exitscope();
@@ -355,9 +352,6 @@ public:
    Symbol get_type_decl(){ return type_decl; }
    bool type_check(Class_ class_, SymTbl obj_env){
       // [self/SELF_TYPE] has been added in semant.cc
-      if (semant_debug){
-         cerr << "  attr " << name->get_string() <<  endl;
-      }
 
       if (init->is_no_expr()){
          return true;
@@ -372,7 +366,7 @@ public:
       bool check_ret = check_subtype(init_type, type_decl, class_);
       if (!check_ret){
          SEMANT_ERROR << "expression type: " << init->get_type()->get_string() <<
-            "is not subtype of declared type: " << type_decl << endl;
+            " is not subtype of declared type: " << type_decl << endl;
       }
       return check_ret;  
    }
@@ -403,8 +397,8 @@ public:
    Symbol get_name(){ return name; }
    Symbol get_type_decl(){ return type_decl; }
    void add_var(Class_ class_, SymTbl obj_env){
-      if (obj_env->lookup(name)){
-         SEMANT_ERROR << "arg" << name->get_string() << "is redefined" << endl;
+      if (obj_env->probe(name)){
+         SEMANT_ERROR << "arg " << name->get_string() << " is redefined" << endl;
          return;
       }
 
@@ -511,7 +505,7 @@ public:
       } else {
          if (!check_subtype(expr->get_type(), type, class_)){
             SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
-               "is not subtype of declared type: " << type->get_string() << endl;
+               " is not subtype of declared type: " << type->get_string() << endl;
             set_type(Object);
             return false;
          } else {
@@ -561,7 +555,7 @@ public:
          return false;
       }
 
-      if (find_symbol(type_name)){
+      if (find_symbol(type_name) < 0){
          SEMANT_ERROR << "Unknown dispatch type: " << type_name->get_string() << endl;
          set_type(Object);
          return false; 
@@ -569,7 +563,7 @@ public:
 
       if (!check_subtype(expr->get_type(), type_name, class_)){
          SEMANT_ERROR << "expression type: " << expr->get_type()->get_string() <<
-            "is not subtype of static dispatch type: " << type_name->get_string() << endl;
+            " is not subtype of static dispatch type: " << type_name->get_string() << endl;
          set_type(Object);
          return false;
       }
@@ -586,9 +580,9 @@ public:
 
       if (method_ptr->formal_count != actual->len()){
          SEMANT_ERROR << "In method " << name->get_string() <<
-            "for type" << class_->get_name() <<
-            "expected" << method_ptr->formal_count <<
-            "args, but get" << actual->len() << "args" << endl;
+            " for type " << class_->get_name() <<
+            " expected " << method_ptr->formal_count <<
+            " args, but get " << actual->len() << " args" << endl;
          set_type(Object);
          return false;
       }
@@ -604,10 +598,10 @@ public:
                class_))
          {
             flag = false;
-            SEMANT_ERROR << "In method" << name->get_string() <<
-               "'s [" << expr_index << "] arg" << 
-               "the current type" << actual->nth(expr_index)->get_type()->get_string() <<
-               "is not subtype of " << method_ptr->formals[expr_index].type_decl->get_string() << endl;
+            SEMANT_ERROR << "Method " << name->get_string() <<
+               " 's [" << expr_index << "] arg" << 
+               " the current type " << actual->nth(expr_index)->get_type()->get_string() <<
+               " is not subtype of " << method_ptr->formals[expr_index].type_decl->get_string() << endl;
             set_type(Object);
          }
       }
@@ -673,9 +667,9 @@ public:
 
       if (method_ptr->formal_count != actual->len()){
          SEMANT_ERROR << "In method " << name->get_string() <<
-            "for type" << class_->get_name() <<
-            "expected" << method_ptr->formal_count <<
-            "args, but get" << actual->len() << "args" << endl;
+            " for type " << class_->get_name() <<
+            " expected " << method_ptr->formal_count <<
+            " args, but get " << actual->len() << " args" << endl;
          set_type(Object);
          return false;
       }
@@ -691,10 +685,10 @@ public:
                class_)
          ){
             flag = false;
-            SEMANT_ERROR << "In method" << name->get_string() <<
-               "'s [" << expr_index << "] arg" << 
-               "the current type" << actual->nth(expr_index)->get_type()->get_string() <<
-               "is not subtype of " << method_ptr->formals[expr_index].type_decl << endl;
+            SEMANT_ERROR << "Method " << name->get_string() <<
+               " 's [" << expr_index << "] arg" << 
+               " the current type " << actual->nth(expr_index)->get_type()->get_string() <<
+               " is not subtype of " << method_ptr->formals[expr_index].type_decl << endl;
             set_type(Object);
          }
       }
@@ -812,6 +806,15 @@ public:
          cases->more(i);
          i = cases->next(i)){
          cases->nth(i)->type_check_and_set(class_, obj_env);
+
+         for (int j = cases->first(); 
+            j < i;
+            j = cases->next(j)){
+            if (is_same_type(cases->nth(j)->get_type_decl(), cases->nth(i)->get_type_decl())){
+               SEMANT_ERROR << cases->nth(i)->get_type_decl()->get_string() <<  
+                  " is dulicatedly appeared" << endl;
+            }
+         }
       }
 
       Symbol final_type;
@@ -915,7 +918,7 @@ public:
          if (!init->is_no_expr() && 
             !check_subtype(init->get_type(), type_decl, class_)){
             SEMANT_ERROR << "expression type: " << init->get_type()->get_string() <<
-               "is not subtype of declared type: " << type_decl->get_string() << endl;
+               " is not subtype of declared type: " << type_decl->get_string() << endl;
             obj_env->addid(identifier, Object);
          } else {
             obj_env->addid(identifier, type_decl);
@@ -1428,7 +1431,7 @@ public:
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
       Symbol type = obj_env->lookup(name);
       if (!type){
-         SEMANT_ERROR << "Unknown object:" << name->get_string() << endl;
+         SEMANT_ERROR << "Unknown object: " << name->get_string() << endl;
          set_type(Object);
          return false;
       } else {

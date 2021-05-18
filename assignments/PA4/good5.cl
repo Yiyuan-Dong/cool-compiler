@@ -1,8 +1,8 @@
 Class A inherits Object {
     a : A;
     b : B <- b;
-    a () : A{
-        a
+    a (b : Int) : A{
+        let b : String in a
     };
 };
 
@@ -21,7 +21,10 @@ Class C inherits B {
 Class Main{
     a : A;
     b : B;
-    main() : A{
-        b.a()
+    main() : Int{
+        case 1 of 
+            a : Int => 1;
+            a : String => 2;
+        esac
     };
 };

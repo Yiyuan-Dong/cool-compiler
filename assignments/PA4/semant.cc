@@ -369,13 +369,17 @@ Symbol LCA(Symbol a, Symbol b){
     assert(a_index >= 0);
     assert(b_index >= 0);
 
-    while(class_nodes[a_index].depth < class_nodes[b_index].depth){
+    while(class_nodes[a_index].depth > class_nodes[b_index].depth){
         a_index = class_nodes[a_index].parent_index;
+        assert(a_index >= 0);
+        assert(a_index < classes_number);
     }
-    while(class_nodes[b_index].depth < class_nodes[a_index].depth){
+    while(class_nodes[b_index].depth > class_nodes[a_index].depth){
         b_index = class_nodes[b_index].parent_index;
+        assert(b_index >= 0);
+        assert(b_index < classes_number);
     }
-
+    
     while (a_index != b_index){
         a_index = class_nodes[a_index].parent_index;
         b_index = class_nodes[b_index].parent_index;
@@ -430,8 +434,8 @@ void fullfill_class(int class_node_index, Class_ class_){
             another_index = features->next(another_index)){
             if (features->nth(another_index)->get_type() == TYPE_METHOD && 
                 is_same_type(feature->get_name(), features->nth(another_index)->get_name())){
-                semant_error(class_->get_filename(), class_) 
-                    << "method" << feature->get_name()->get_string() << "is duplicated defined" << endl;
+                semant_error(class_->get_filename(), feature) 
+                    << "method " << feature->get_name()->get_string() << " is duplicated defined" << endl;
                 check_dup = true;
             }
         }
@@ -444,6 +448,7 @@ void fullfill_class(int class_node_index, Class_ class_){
         method_node *method_node_ptr = class_nodes[class_node_index].method_nodes + method_index;
         method_node_ptr->name = feature->get_name();
         method_node_ptr->return_type = feature->get_return_type();
+        method_node_ptr->method = feature;
         Formals formals = feature->get_formals();
         int formal_count = 0;
 
@@ -467,7 +472,7 @@ void fullfill_class(int class_node_index, Class_ class_){
             formal_node_ptr->name = formal->get_name();
             Symbol type_decl = formal->get_type_decl();
             if (find_symbol(type_decl) < 0){
-                semant_error(class_->get_filename(), class_) << 
+                semant_error(class_->get_filename(), formal) << 
                     "Unknown type name: " << type_decl->get_string() << endl;
                 formal_node_ptr->type_decl = Object;
             } else {
@@ -514,7 +519,7 @@ void check_method_inherits(int class_node_index){
                     }
 
                     if (wrong){
-                        semant_error(class_->get_filename(), class_) << "method: " <<
+                        semant_error(class_->get_filename(), my_method_ptr->method) << "method: " <<
                             my_method_ptr->name->get_string() << " signature changed" << endl;
                     }
                 }
@@ -529,7 +534,8 @@ void debug_print_class_nodes(){
     if (semant_debug){
         cerr << "class count: " << classes_number << endl;
         for (int i = 0; i < classes_number; i++){
-            cerr << "name: " << class_nodes[i].name->get_string() << ' ' 
+            cerr << "  index: " << i << " "
+                << "name: " << class_nodes[i].name->get_string() << ' ' 
                 << ",parent: " << class_nodes[i].parent->get_string() << ' ' 
                 << ",parent index: " << class_nodes[i].parent_index << ' '
                 << ",depth: " << class_nodes[i].depth << endl;
@@ -540,7 +546,7 @@ void debug_print_class_nodes(){
 void debug_count(){
     static int counter = 0;
     if (semant_debug){
-        cerr << "Count: " << counter++ << endl; 
+        cerr << endl << "Stage: " << counter++ << endl << endl; 
     }
 }
 
@@ -734,9 +740,6 @@ void program_class::semant()
 
         obj_env->exitscope();
     }
-
-    cerr << "finish!" << endl;
-    exit(1); // delete it!
 
     if (error_count) {
 	    cerr << "Compilation halted due to static semantic errors." << endl;
