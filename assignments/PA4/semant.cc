@@ -676,6 +676,17 @@ void program_class::semant()
         check_method_inherits(class_index + 5);
     }
 
+    // check whether Main.main is defined
+    if (find_symbol(Main) < 0){
+        cerr << "Class Main is not find" << endl;
+        error_count ++;
+    } else {
+        if (!find_method(main_meth, Main)){
+            cerr << "method main is not defined in Main" << endl;
+            error_count ++;
+        }
+    }
+
     // 5. type checking and type assignment
     SymbolTable<Symbol, Entry> *obj_env = new SymbolTable<Symbol, Entry>();
     for (int class_node_index = 5; class_node_index < classes_number; class_node_index++){

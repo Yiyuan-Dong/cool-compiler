@@ -10,8 +10,8 @@ class C {
 	};
 };
 
-Class Main {
-	main():C {
+Class Mian {
+	miaan():C {
 	 {
 	  (new C).init(1,1);
 	  (new C).init(1,true,3);
