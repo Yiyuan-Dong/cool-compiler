@@ -48,13 +48,19 @@ public:
    CgenNodeP root();
 };
 
+typedef struct {
+   Symbol class_name;
+   Symbol func_name;
+} DispatchEntry;
 
 class CgenNode : public class__class {
 private: 
    CgenNodeP parentnd;                        // Parent of class
    List<CgenNode> *children;                  // Children of class
    Basicness basic_status;                    // `Basic' if class is basic
-                                              // `NotBasic' otherwise
+                                              // `NotBasic' otherwise 
+protected:
+   List<DispatchEntry> *dispatch_table = NULL;
 
 public:
    CgenNode(Class_ c,
@@ -66,6 +72,10 @@ public:
    void set_parentnd(CgenNodeP p);
    CgenNodeP get_parentnd() { return parentnd; }
    int basic() { return (basic_status == Basic); }
+   void add_dispatch_func(Symbol func_name, Symbol class_name);
+   void gen_dispatch_tbl(CgenNodeP);
+   void code_dispatch_table(ostream &s);
+   void code_prototype_object(ostream &s, int class_index);
 };
 
 class BoolConst 
@@ -78,3 +88,6 @@ class BoolConst
   void code_ref(ostream&) const;
 };
 
+bool equal_Symbol(Symbol x, Symbol y){
+   return x->equal_string(y->get_string(), y->get_len());
+}

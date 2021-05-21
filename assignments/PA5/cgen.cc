@@ -381,7 +381,7 @@ static void emit_gc_check(char *source, ostream &s)
 //
 void StringEntry::code_ref(ostream& s)
 {
-  s << STRCONST_PREFIX << index;
+  s << STRCONST_PREFIX << index;  // Dyy: something like ``str_const1'' ?
 }
 
 //
@@ -403,6 +403,7 @@ void StringEntry::code_def(ostream& s, int stringclasstag)
 
 
  /***** Add dispatch information for class String ******/
+      s << stringclasstag;
 
       s << endl;                                              // dispatch table
       s << WORD;  lensym->code_ref(s);  s << endl;            // string length
@@ -445,6 +446,7 @@ void IntEntry::code_def(ostream &s, int intclasstag)
       << WORD; 
 
  /***** Add dispatch information for class Int ******/
+      s << intclasstag;
 
       s << endl;                                          // dispatch table
       s << WORD << str << endl;                           // integer value
@@ -489,6 +491,7 @@ void BoolConst::code_def(ostream& s, int boolclasstag)
       << WORD;
 
  /***** Add dispatch information for class Bool ******/
+      s << boolclasstag;
 
       s << endl;                                            // dispatch table
       s << WORD << val << endl;                             // value (0 or 1)
@@ -611,7 +614,7 @@ void CgenClassTable::code_constants()
   stringtable.add_string("");
   inttable.add_string("0");
 
-  stringtable.code_string_table(str,stringclasstag);
+  stringtable.code_string_table(str,stringclasstag);  // 就是把string_table里的每个string都放进.data里
   inttable.code_string_table(str,intclasstag);
   code_bools(boolclasstag);
 }
@@ -619,9 +622,9 @@ void CgenClassTable::code_constants()
 
 CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
 {
-   stringclasstag = 0 /* Change to your String class tag here */;
-   intclasstag =    0 /* Change to your Int class tag here */;
-   boolclasstag =   0 /* Change to your Bool class tag here */;
+   stringclasstag = 4 /* Change to your String class tag here */;
+   intclasstag =    2 /* Change to your Int class tag here */;
+   boolclasstag =   3 /* Change to your Bool class tag here */;
 
    enterscope();
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
@@ -637,8 +640,8 @@ void CgenClassTable::install_basic_classes()
 {
 
 // The tree package uses these globals to annotate the classes built below.
-  //curr_lineno  = 0;
-  Symbol filename = stringtable.add_string("<basic class>");
+  // curr_lineno  = 0;
+  Symbol filename = stringtable.add_string("<basic class>");  // 他也在string_const里
 
 //
 // A few special class names are installed in the lookup table but not
@@ -648,6 +651,8 @@ void CgenClassTable::install_basic_classes()
 // SELF_TYPE is the self class; it cannot be redefined or inherited.
 // prim_slot is a class known to the code generator.
 //
+
+  // 他们都会在string_const里
   addid(No_class,
 	new CgenNode(class_(No_class,No_class,nil_Features(),filename),
 			    Basic,this));
@@ -815,7 +820,68 @@ void CgenNode::set_parentnd(CgenNodeP p)
   parentnd = p;
 }
 
+void CgenNode::add_dispatch_func(Symbol func_name, Symbol class_name){
+  for (List<DispatchEntry> *l = dispatch_table; l; l = l->tl()){
+    if (equal_Symbol(l->hd()->func_name, func_name)){
+      return;
+    }
+  }
 
+  dispatch_table = new List<DispatchEntry>(new DispatchEntry{func_name = func_name, class_name = class_name}, dispatch_table);
+}
+
+void CgenNode::gen_dispatch_tbl(CgenNodeP curr_class){  
+  assert(curr_class);
+
+  Features features = curr_class->get_features();
+
+  for (int i = features->first(); features->more(i); i = features->next(i)){
+    Feature feature = features->nth(i);
+    if (feature->is_method()){
+      this->add_dispatch_func(feature->get_name(), curr_class->get_name());
+    }
+  }
+
+  if (!equal_Symbol(curr_class->get_name(), No_class)){
+    this->gen_dispatch_tbl(curr_class->get_parentnd());
+  }
+}
+
+void CgenNode::code_dispatch_table(ostream &s){
+  s << get_name() << DISPTAB_SUFFIX << LABEL ;
+  for(List<DispatchEntry> *l = dispatch_table; l; l = l->tl()){
+    s << WORD << l->hd()->class_name << "." << l->hd()->func_name << endl;
+  }
+}
+
+void CgenNode::code_prototype_object(ostream &s, int index){
+  Features features = get_features();
+  int attr_count = 0;
+
+  for (int i = features->first(); features->more(i); i = features->next(i)){
+    Feature feature = features->nth(i);
+    if (feature->is_method()){
+      continue;
+    }
+    attr_count++;
+  }
+
+  s << get_name() << PROTOBJ_SUFFIX << LABEL <<
+    WORD << index << endl <<
+    WORD << attr_count + 3 << endl <<
+    WORD << get_name() << DISPTAB_SUFFIX << endl;
+
+  for (int i = features->first(); features->more(i); i = features->next(i)){
+    Feature feature = features->nth(i);
+    if (feature->is_method()){
+      continue;
+    }
+    
+    if (equal_Symbol())
+  }
+
+  s << WORD << -1 << endl;
+}
 
 void CgenClassTable::code()
 {
@@ -833,6 +899,19 @@ void CgenClassTable::code()
 //                   - class_nameTab
 //                   - dispatch tables
 //
+  if (cgen_debug) cout << "coding dispatch table" << endl;
+
+  int count = 0;
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    l->hd()->gen_dispatch_tbl(l->hd());
+    count ++;
+  }
+
+  if (cgen_debug) cout << "coding prototype ondjects" << endl;
+
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    l->hd()->code_prototype_object(str, count--);
+  }
 
   if (cgen_debug) cout << "coding global text" << endl;
   code_global_text();
