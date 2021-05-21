@@ -827,7 +827,7 @@ void CgenNode::add_dispatch_func(Symbol func_name, Symbol class_name){
     }
   }
 
-  dispatch_table = new List<DispatchEntry>(new DispatchEntry{func_name = func_name, class_name = class_name}, dispatch_table);
+  dispatch_table = new List<DispatchEntry>(new DispatchEntry{class_name, func_name}, dispatch_table);
 }
 
 void CgenNode::gen_dispatch_tbl(CgenNodeP curr_class){  
@@ -866,6 +866,8 @@ void CgenNode::code_prototype_object(ostream &s, int index){
     attr_count++;
   }
 
+  s << WORD << -1 << endl;
+
   s << get_name() << PROTOBJ_SUFFIX << LABEL <<
     WORD << index << endl <<
     WORD << attr_count + 3 << endl <<
@@ -877,10 +879,31 @@ void CgenNode::code_prototype_object(ostream &s, int index){
       continue;
     }
     
-    if (equal_Symbol())
-  }
+    if (equal_Symbol(feature->get_type(), Str)){
+      s << WORD;
+      stringtable.lookup_string("")->code_ref(s);
+      s << endl;
 
-  s << WORD << -1 << endl;
+    } else {
+      if (equal_Symbol(feature->get_type(), Int)){
+        s << WORD;
+        inttable.lookup_string("0")->code_ref(s);
+        s << endl;
+
+      } else {
+        if (equal_Symbol(feature->get_type(), Bool)){
+          s << WORD;
+          falsebool.code_ref(s);
+          s << endl;
+
+        } else {
+          s << WORD << 0 << endl;
+        }
+      }
+    }
+    
+    
+  }
 }
 
 void CgenClassTable::code()
@@ -904,11 +927,13 @@ void CgenClassTable::code()
   int count = 0;
   for (List<CgenNode> *l = nds; l; l = l->tl()){
     l->hd()->gen_dispatch_tbl(l->hd());
-    count ++;
+    l->hd()->code_dispatch_table(str);
+    count++;
   }
 
   if (cgen_debug) cout << "coding prototype ondjects" << endl;
 
+  count--;
   for (List<CgenNode> *l = nds; l; l = l->tl()){
     l->hd()->code_prototype_object(str, count--);
   }
