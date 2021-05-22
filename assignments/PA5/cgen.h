@@ -58,14 +58,20 @@ typedef struct {
    Symbol func_name;
 } DispatchEntry;
 
+typedef struct{
+   Symbol name;
+   Symbol decl_type;
+} AttrEntry;
+
 class CgenNode : public class__class {
 private: 
    CgenNodeP parentnd;                        // Parent of class
    List<CgenNode> *children;                  // Children of class
    Basicness basic_status;                    // `Basic' if class is basic
                                               // `NotBasic' otherwise 
-protected:
    List<DispatchEntry> *dispatch_table = NULL;
+   List<AttrEntry> *attrs = NULL;
+   int attr_count = 0;
 
 public:
    CgenNode(Class_ c,
@@ -81,6 +87,7 @@ public:
    void gen_dispatch_tbl(CgenNodeP);
    void code_dispatch_table(ostream &s);
    void code_prototype_object(ostream &s, int class_index);
+   void fetch_attrs(CgenNodeP current_class);
 };
 
 class BoolConst 

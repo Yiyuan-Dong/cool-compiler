@@ -403,7 +403,7 @@ void StringEntry::code_def(ostream& s, int stringclasstag)
 
 
  /***** Add dispatch information for class String ******/
-      s << stringclasstag;
+      s << "String" << DISPTAB_SUFFIX;
 
       s << endl;                                              // dispatch table
       s << WORD;  lensym->code_ref(s);  s << endl;            // string length
@@ -446,7 +446,7 @@ void IntEntry::code_def(ostream &s, int intclasstag)
       << WORD; 
 
  /***** Add dispatch information for class Int ******/
-      s << intclasstag;
+      s << "Int" << DISPTAB_SUFFIX;
 
       s << endl;                                          // dispatch table
       s << WORD << str << endl;                           // integer value
@@ -491,7 +491,7 @@ void BoolConst::code_def(ostream& s, int boolclasstag)
       << WORD;
 
  /***** Add dispatch information for class Bool ******/
-      s << boolclasstag;
+      s << "Bool" << DISPTAB_SUFFIX;
 
       s << endl;                                            // dispatch table
       s << WORD << val << endl;                             // value (0 or 1)
@@ -856,17 +856,36 @@ void CgenNode::code_dispatch_table(ostream &s){
   }
 }
 
-void CgenNode::code_prototype_object(ostream &s, int index){
-  Features features = get_features();
-  int attr_count = 0;
+void CgenNode::fetch_attrs(CgenNodeP curr_class){
+  if (!equal_Symbol(curr_class->get_parentnd()->get_name(), No_class)){
+    fetch_attrs(curr_class->get_parentnd());
+  }
 
-  for (int i = features->first(); features->more(i); i = features->next(i)){
+  Features features = curr_class->get_features();
+  for (int i = features->first(); features->more(i); i = features->next(i)) {
     Feature feature = features->nth(i);
+    
     if (feature->is_method()){
       continue;
     }
     attr_count++;
+    attrs = new List<AttrEntry>(new AttrEntry{feature->get_name(), feature->get_type()}, attrs);
   }
+}
+
+void CgenNode::code_prototype_object(ostream &s, int index){
+
+  fetch_attrs(this);
+
+  // Reverse `attrs`
+  List<AttrEntry> *tmpptr = NULL;
+  for (; attrs; ){
+    tmpptr = new List<AttrEntry>(attrs->hd(), tmpptr);
+    List<AttrEntry> * old_attrs = attrs;
+    attrs = attrs->tl();
+    delete old_attrs;
+  }
+  attrs = tmpptr;
 
   s << WORD << -1 << endl;
 
@@ -875,25 +894,23 @@ void CgenNode::code_prototype_object(ostream &s, int index){
     WORD << attr_count + 3 << endl <<
     WORD << get_name() << DISPTAB_SUFFIX << endl;
 
-  for (int i = features->first(); features->more(i); i = features->next(i)){
-    Feature feature = features->nth(i);
-    if (feature->is_method()){
-      continue;
-    }
-    
-    if (equal_Symbol(feature->get_type(), Str)){
+  for (List<AttrEntry> *ptr = attrs; ptr; ptr = ptr->tl()){
+    Symbol type = ptr->hd()->decl_type;
+    Symbol name = ptr->hd()->name;
+
+    if (equal_Symbol(type, Str)){
       s << WORD;
       stringtable.lookup_string("")->code_ref(s);
       s << endl;
 
     } else {
-      if (equal_Symbol(feature->get_type(), Int)){
+      if (equal_Symbol(type, Int)){
         s << WORD;
         inttable.lookup_string("0")->code_ref(s);
         s << endl;
 
       } else {
-        if (equal_Symbol(feature->get_type(), Bool)){
+        if (equal_Symbol(type, Bool)){
           s << WORD;
           falsebool.code_ref(s);
           s << endl;
@@ -971,7 +988,7 @@ void CgenClassTable::code()
 
   if (cgen_debug) cout << "coding prototype ondjects" << endl;
   code_prototype_object();
-  
+
   if (cgen_debug) cout << "coding global text" << endl;
   code_global_text();
 
