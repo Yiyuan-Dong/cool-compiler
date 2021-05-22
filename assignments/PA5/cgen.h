@@ -21,6 +21,7 @@ private:
    int stringclasstag;
    int intclasstag;
    int boolclasstag;
+   int class_count = 0;
 
 
 // The following methods emit code for
@@ -31,6 +32,10 @@ private:
    void code_bools(int);
    void code_select_gc();
    void code_constants();
+   void code_objtable();
+   void code_nametable();
+   void code_dispatch_table();
+   void code_prototype_object();
 
 // The following creates an inheritance graph from
 // a list of classes.  The graph is implemented as

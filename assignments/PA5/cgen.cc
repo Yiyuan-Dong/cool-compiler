@@ -767,6 +767,8 @@ void CgenClassTable::install_basic_classes()
 //
 void CgenClassTable::install_class(CgenNodeP nd)
 {
+  class_count++;
+
   Symbol name = nd->get_name();
 
   if (probe(name))
@@ -906,6 +908,42 @@ void CgenNode::code_prototype_object(ostream &s, int index){
   }
 }
 
+void CgenClassTable::code_nametable(){
+  str << CLASSNAMETAB << LABEL;
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    Symbol class_name = l->hd()->get_name();
+    StringEntry *entry = stringtable.lookup_string(class_name->get_string());
+    str << WORD;
+    entry->code_ref(str);
+    str << endl;
+  }
+}
+
+void CgenClassTable::code_objtable(){
+  str << CLASSOBJTAB << LABEL;
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    Symbol class_name = l->hd()->get_name();
+    str << WORD << class_name->get_string() << PROTOBJ_SUFFIX << endl;
+    str << WORD << class_name->get_string() << CLASSINIT_SUFFIX << endl;
+  }
+}
+
+void CgenClassTable::code_dispatch_table(){
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    l->hd()->gen_dispatch_tbl(l->hd());
+    l->hd()->code_dispatch_table(str);
+  }
+}
+
+void CgenClassTable::code_prototype_object(){
+  int count = class_count;
+
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    l->hd()->code_prototype_object(str, count--);
+  }
+}
+
+
 void CgenClassTable::code()
 {
   if (cgen_debug) cout << "coding global data" << endl;
@@ -922,22 +960,18 @@ void CgenClassTable::code()
 //                   - class_nameTab
 //                   - dispatch tables
 //
-  if (cgen_debug) cout << "coding dispatch table" << endl;
+  if (cgen_debug) cout << "coding name table" << endl;
+  code_nametable();
 
-  int count = 0;
-  for (List<CgenNode> *l = nds; l; l = l->tl()){
-    l->hd()->gen_dispatch_tbl(l->hd());
-    l->hd()->code_dispatch_table(str);
-    count++;
-  }
+  if (cgen_debug) cout << "coding object table" << endl;
+  code_objtable();
+
+  if (cgen_debug) cout << "coding dispatch table" << endl;
+  code_dispatch_table();
 
   if (cgen_debug) cout << "coding prototype ondjects" << endl;
-
-  count--;
-  for (List<CgenNode> *l = nds; l; l = l->tl()){
-    l->hd()->code_prototype_object(str, count--);
-  }
-
+  code_prototype_object();
+  
   if (cgen_debug) cout << "coding global text" << endl;
   code_global_text();
 
