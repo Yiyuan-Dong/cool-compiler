@@ -28,6 +28,15 @@
 extern void emit_string_constant(ostream& str, char *s);
 extern int cgen_debug;
 
+// Newly added
+SymbolTable<Symbol, ObjEntry> *obj_table = NULL;
+int obj_index = 0;
+int label_index = 0;
+
+int max(int x, int y){
+  return x > y ? x : y;
+}
+
 //
 // Three symbols from the semantic analyzer (semant.cc) are used.
 // If e : No_type, then no code is generated for e.
@@ -354,6 +363,10 @@ static void emit_gc_check(char *source, ostream &s)
   s << JAL << "_gc_check" << endl;
 }
 
+static void get_args(char *dest, int index, int length, ostream &s){
+  int offset = length - index + 2;
+  emit_load(dest, offset, FP, s);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -960,6 +973,77 @@ void CgenClassTable::code_prototype_object(){
   }
 }
 
+void code_start(ostream& s){
+  emit_addiu(SP, SP, -12, s);
+  emit_store(FP, 3, SP, s);
+  emit_store(S0, 2, SP, s);
+  emit_store(RA, 1, SP, s);
+  emit_addiu(FP, SP, 4, s);
+  emit_move(S0, ACC, s);
+}
+
+void code_end(ostream& s) {
+  emit_move(ACC, S0, s);
+  emit_load(FP, 3, SP, s);
+  emit_load(S0, 2, SP, s);
+  emit_load(RA, 1, SP, s);
+  emit_addiu(SP, SP, 12, s);
+  emit_return(s); 
+}
+
+void CgenClassTable::code_init(){
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    l->hd()->code_init(str);
+  }
+} 
+
+int CgenNode::get_attr_index(Symbol name){
+  int count = 0;
+  for (List<AttrEntry> *l = attrs; l; l = l->tl()){
+    if (equal_Symbol(l->hd()->name, name)){
+      return count;
+    }
+    count++;
+  }
+
+  // Should never go here !!!
+  assert(true);
+  return -1;
+}
+
+void CgenNode::code_init(ostream &str){
+  str << get_name() << CLASSINIT_SUFFIX << LABEL;
+
+  code_start(str);
+  if (!equal_Symbol(get_name(), Object)){
+    str << JAL << get_parent()->get_string() << CLASSINIT_SUFFIX << endl;
+  }
+
+  Features features = get_features();
+  for (int i = features->first(); 
+    features->more(i); 
+    i = features->next(i)){
+
+    Feature feature = features->nth(i);
+
+    if (feature->is_method()){
+      continue;
+    }
+
+    Expression init = feature->get_init();
+    assert(init);
+    if (init->is_no_expr()){
+      continue;
+    }
+
+    init->code(str);
+    int index = get_attr_index(feature->get_name());
+    emit_store(ACC, 3 + index, S0, str);
+  }
+  
+  code_end(str);
+}
+
 
 void CgenClassTable::code()
 {
@@ -996,6 +1080,8 @@ void CgenClassTable::code()
 //                   - object initializer
 //                   - the class methods
 //                   - etc...
+  if (cgen_debug) cout << "coding initializer" << endl;
+  code_init();
 
 }
 
@@ -1102,15 +1188,109 @@ void bool_const_class::code(ostream& s)
 }
 
 void new__class::code(ostream &s) {
+  s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
+  s << JAL << "Object.copy" << endl;
+  s << JAL << type_name << CLASSINIT_SUFFIX << endl;
 }
 
 void isvoid_class::code(ostream &s) {
+  e1->code(s);
+  emit_move(T1, ACC, s);
+  emit_load_bool(ACC, truebool, s);
+  emit_beqz(T1, label_index++, s);
+  emit_load_bool(ACC, falsebool, s);
+  emit_label_def(label_index, s);
 }
 
 void no_expr_class::code(ostream &s) {
 }
 
 void object_class::code(ostream &s) {
+
+}
+
+// temp count
+int assign_class::temp_count() {
+  return expr->temp_count();
+}
+
+// we still use stack push and pop for dispatch
+int static_dispatch_class::temp_count() {
+
+}
+
+int dispatch_class::temp_count() {
+}
+
+int cond_class::temp_count() {
+}
+
+int loop_class::temp_count() {
+}
+
+int typcase_class::temp_count() {
+}
+
+int block_class::temp_count() {
+}
+
+int let_class::temp_count() {
+}
+
+int plus_class::temp_count() {
+}
+
+int sub_class::temp_count() {
+}
+
+int mul_class::temp_count() {
+}
+
+int divide_class::temp_count() {
+}
+
+int neg_class::temp_count() {
+}
+
+int lt_class::temp_count() {
+}
+
+int eq_class::temp_count() {
+}
+
+int leq_class::temp_count() {
+}
+
+int comp_class::temp_count() {
+}
+
+int int_const_class::temp_count()  
+{
+  //
+  // Need to be sure we have an IntEntry *, not an arbitrary Symbol
+  //
+  emit_load_int(ACC,inttable.lookup_string(token->get_string()),s);
+}
+
+int string_const_class::temp_count()
+{
+}
+
+int bool_const_class::temp_count()
+{
+}
+
+int new__class::temp_count() {
+}
+
+int isvoid_class::temp_count() {
+}
+
+int no_expr_class::temp_count() {
+}
+
+int object_class::temp_count() {
+
 }
 
 

@@ -73,7 +73,8 @@ void dump_with_types(ostream&,int);
 virtual void dump_with_types(ostream&,int) = 0;        \
 virtual bool is_method() = 0;              \
 virtual Symbol get_name() = 0;   \
-virtual Symbol get_type() = 0;
+virtual Symbol get_type() = 0;   \
+virtual Expression get_init(){ return NULL; }
 
 
 #define Feature_SHARED_EXTRAS                                       \
@@ -82,12 +83,13 @@ void dump_with_types(ostream&,int);
 #define  method_EXTRAS     \
 bool is_method(){ return true; }  \
 Symbol get_name(){ return name; }  \
-Symbol get_type(){ return return_type; }
+Symbol get_type(){ return return_type; }  
 
 #define attr_EXTRAS    \
 bool is_method(){ return false; }   \
 Symbol get_name(){ return name; }   \
-Symbol get_type(){ return type_decl; }
+Symbol get_type(){ return type_decl; }   \
+Expression get_init(){ return init; }
 
 
 #define Formal_EXTRAS                              \
@@ -113,11 +115,17 @@ Expression set_type(Symbol s) { type = s; return this; } \
 virtual void code(ostream&) = 0; \
 virtual void dump_with_types(ostream&,int) = 0;  \
 void dump_type(ostream&, int);               \
-Expression_class() { type = (Symbol) NULL; }
+Expression_class() { type = (Symbol) NULL; }  \
+virtual bool is_no_expr() { return false; }  \
+virtual int temp_count() = 0;
 
 #define Expression_SHARED_EXTRAS           \
 void code(ostream&); 			   \
-void dump_with_types(ostream&,int); 
+void dump_with_types(ostream&,int);  \
+int temp_count(); 
+
+#define no_expr_EXTRAS   \
+bool is_no_expr() { return true; }
 
 
 #endif

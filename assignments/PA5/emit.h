@@ -74,7 +74,7 @@
 #define SP   "$sp"		// Stack pointer 
 #define FP   "$fp"		// Frame pointer 
 #define RA   "$ra"		// Return address 
-
+#define S0   "$s0"
 //
 // Opcodes
 //

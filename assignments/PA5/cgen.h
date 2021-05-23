@@ -7,12 +7,21 @@
 enum Basicness     {Basic, NotBasic};
 #define TRUE 1
 #define FALSE 0
+#define TYPE_ATTR 0
+#define TYPE_ARGS 1
+#define TYPE_LET  2
+#define TYPE_CASE 3
 
 class CgenClassTable;
 typedef CgenClassTable *CgenClassTableP;
 
 class CgenNode;
 typedef CgenNode *CgenNodeP;
+
+typedef struct{
+   int type;
+   int index;
+}ObjEntry;
 
 class CgenClassTable : public SymbolTable<Symbol,CgenNode> {
 private:
@@ -36,6 +45,7 @@ private:
    void code_nametable();
    void code_dispatch_table();
    void code_prototype_object();
+   void code_init();
 
 // The following creates an inheritance graph from
 // a list of classes.  The graph is implemented as
@@ -88,6 +98,9 @@ public:
    void code_dispatch_table(ostream &s);
    void code_prototype_object(ostream &s, int class_index);
    void fetch_attrs(CgenNodeP current_class);
+   void code_init(ostream &str);
+   int get_attr_index(Symbol name);
+   void code_methods(ostream &str);
 };
 
 class BoolConst 
