@@ -966,12 +966,22 @@ void CgenClassTable::code_dispatch_table(){
 }
 
 void CgenClassTable::code_prototype_object(){
-  int count = class_count;
+  int index = 0;
 
   for (List<CgenNode> *l = nds; l; l = l->tl()){
-    l->hd()->code_prototype_object(str, count--);
+    l->hd()->code_prototype_object(str, index++);
   }
 }
+
+void CgenClassTable::reverse_nds(){
+  List<CgenNode> *new_nds = NULL;
+  for (; nds; nds = nds->tl()){
+    new_nds = new List<CgenNode>(nds->hd(), new_nds);
+  }
+
+  nds = new_nds;
+}
+
 
 void code_start(ostream& s){
   emit_addiu(SP, SP, -12, s);
@@ -1061,6 +1071,8 @@ void CgenClassTable::code()
 //                   - class_nameTab
 //                   - dispatch tables
 //
+  reverse_nds();
+
   if (cgen_debug) cout << "coding name table" << endl;
   code_nametable();
 
@@ -1188,6 +1200,8 @@ void bool_const_class::code(ostream& s)
 }
 
 void new__class::code(ostream &s) {
+  // TODO: new SELF_TYPE is totally different!
+
   s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
   s << JAL << "Object.copy" << endl;
   s << JAL << type_name << CLASSINIT_SUFFIX << endl;
