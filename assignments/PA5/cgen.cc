@@ -1214,83 +1214,153 @@ int assign_class::temp_count() {
   return expr->temp_count();
 }
 
-// we still use stack push and pop for dispatch
+// we still use stack push and pop for dispatch.
+// That means, the result of each args should not be counted
+// in the temp vars
+ 
 int static_dispatch_class::temp_count() {
-
+  int maximum = expr->temp_count();
+  for (int i = actual->first(); actual->more(i); i = actual->next(i)){
+    maximum  = max(maximum, actual->nth(i)->temp_count());
+  }
+  return maximum;
 }
 
 int dispatch_class::temp_count() {
+  int maximum = expr->temp_count();
+  for (int i = actual->first(); actual->more(i); i = actual->next(i)){
+    maximum  = max(maximum, actual->nth(i)->temp_count());
+  }
+  return maximum;
 }
 
 int cond_class::temp_count() {
+  return max(pred->temp_count(), 
+    max(then_exp->temp_count(), else_exp->temp_count())
+  );
 }
 
 int loop_class::temp_count() {
+  return max(pred->temp_count(), body->temp_count());
 }
 
 int typcase_class::temp_count() {
+  int maximum = 0;
+  for (int i = cases->first(); cases->more(i); i = cases->next(i)){
+    maximum = max(maximum, cases->nth(i)->get_expr()->temp_count());
+  }
+
+  // Each branch will have a new temp
+  return maximum + 1;
 }
 
 int block_class::temp_count() {
+  int maximum = 0;
+  for (int i = body->first(); body->more(i); i = body->next(i)){
+    maximum = max(maximum, body->nth(i)->temp_count());
+  }
+
+  return maximum;
 }
 
 int let_class::temp_count() {
+  int init_count = init->temp_count();
+  int body_count = body->temp_count();
+
+  // Only body has a new var
+  return max(init_count, body_count + 1);
 }
 
 int plus_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int sub_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int mul_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int divide_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int neg_class::temp_count() {
+  return e1->temp_count();
 }
 
 int lt_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int eq_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int leq_class::temp_count() {
+  int left_count = e1->temp_count();
+  int right_count = e2->temp_count();
+
+  // We need to store left when calculating right
+  return max(left_count, right_count + 1);
 }
 
 int comp_class::temp_count() {
+  return e1->temp_count();
 }
 
-int int_const_class::temp_count()  
-{
-  //
-  // Need to be sure we have an IntEntry *, not an arbitrary Symbol
-  //
-  emit_load_int(ACC,inttable.lookup_string(token->get_string()),s);
+int int_const_class::temp_count() {
+  return 0;
 }
 
-int string_const_class::temp_count()
-{
+int string_const_class::temp_count() {
+  return 0;
 }
 
-int bool_const_class::temp_count()
-{
+int bool_const_class::temp_count() {
+  return 0;
 }
 
 int new__class::temp_count() {
+  return 0;
 }
 
 int isvoid_class::temp_count() {
+  return e1->temp_count();
 }
 
 int no_expr_class::temp_count() {
+  return 0;
 }
 
 int object_class::temp_count() {
-
+  return 0;
 }
 
 
