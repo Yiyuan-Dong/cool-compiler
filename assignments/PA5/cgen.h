@@ -20,7 +20,8 @@ typedef CgenNode *CgenNodeP;
 
 typedef struct{
    int type;
-   int index;
+   int index;  // for args, index = arg_sum - arg_index
+               // (In order to calculate offset)
 }ObjEntry;
 
 class CgenClassTable : public SymbolTable<Symbol,CgenNode> {
@@ -46,6 +47,7 @@ private:
    void code_dispatch_table();
    void code_prototype_object();
    void code_init();
+   void code_methods();
 
 // The following creates an inheritance graph from
 // a list of classes.  The graph is implemented as

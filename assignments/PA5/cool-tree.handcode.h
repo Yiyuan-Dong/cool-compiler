@@ -65,7 +65,7 @@ virtual void dump_with_types(ostream&,int) = 0;
 Symbol get_name()   { return name; }		       \
 Symbol get_parent() { return parent; }     	       \
 Symbol get_filename() { return filename; }             \
-Features get_features() {return features; }         \
+Features get_features() { return features; }         \
 void dump_with_types(ostream&,int);                    
 
 
@@ -74,7 +74,9 @@ virtual void dump_with_types(ostream&,int) = 0;        \
 virtual bool is_method() = 0;              \
 virtual Symbol get_name() = 0;   \
 virtual Symbol get_type() = 0;   \
-virtual Expression get_init(){ return NULL; }
+virtual Expression get_init(){ return NULL; }   \
+virtual Expression get_expr(){ return NULL; }   \
+virtual void code(ostream &s){}
 
 
 #define Feature_SHARED_EXTRAS                                       \
@@ -83,7 +85,9 @@ void dump_with_types(ostream&,int);
 #define  method_EXTRAS     \
 bool is_method(){ return true; }  \
 Symbol get_name(){ return name; }  \
-Symbol get_type(){ return return_type; }  
+Symbol get_type(){ return return_type; }  \
+Expression get_expr(){ return expr; }   \
+virtual void code(ostream &s);
 
 #define attr_EXTRAS    \
 bool is_method(){ return false; }   \
@@ -93,21 +97,27 @@ Expression get_init(){ return init; }
 
 
 #define Formal_EXTRAS                              \
-virtual void dump_with_types(ostream&,int) = 0;
+virtual void dump_with_types(ostream&,int) = 0;    \
+virtual Symbol get_name() = 0;
 
 
 #define formal_EXTRAS                           \
-void dump_with_types(ostream&,int);
+void dump_with_types(ostream&,int);         \
+Symbol get_name(){ return name; }
 
 
 #define Case_EXTRAS                             \
 virtual void dump_with_types(ostream& ,int) = 0;   \
-virtual Expression get_expr() = 0;
+virtual Expression get_expr() = 0;   \
+virtual Symbol get_name() = 0;       \
+virtual Symbol get_type_decl() = 0;
 
 
 #define branch_EXTRAS                                   \
 void dump_with_types(ostream& ,int);  \
-Expression get_expr(){ return expr; }
+Expression get_expr(){ return expr; }    \
+Symbol get_name(){ return name; }    \
+Symbol get_type_decl(){ return type_decl; }
 
 
 #define Expression_EXTRAS                    \

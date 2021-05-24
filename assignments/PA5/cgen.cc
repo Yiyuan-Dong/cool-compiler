@@ -368,6 +368,27 @@ static void get_args(char *dest, int index, int length, ostream &s){
   emit_load(dest, offset, FP, s);
 }
 
+static void emit_object(Symbol name, ostream &s){
+  auto obj_entry_ptr = obj_table->lookup(name);
+  assert(obj_entry_ptr);
+
+  switch (obj_entry_ptr->type)
+  {
+  case TYPE_ARGS:
+    s << "-" << obj_entry_ptr->index * 4 + 8 << "($fp)";
+    break;
+  case TYPE_ATTR:
+    s << obj_entry_ptr->index * 4 + 12 << "($s0)";
+    break;
+  case TYPE_CASE:
+  case TYPE_LET:
+    s << obj_entry_ptr->index * 4 + 4 << "($fp)"; 
+    break;
+  default:
+    assert(true);
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // coding strings, ints, and booleans
@@ -992,12 +1013,12 @@ void code_start(ostream& s){
   emit_move(S0, ACC, s);
 }
 
-void code_end(ostream& s) {
+void code_end(ostream& s, int arg_num) {
   emit_move(ACC, S0, s);
   emit_load(FP, 3, SP, s);
   emit_load(S0, 2, SP, s);
   emit_load(RA, 1, SP, s);
-  emit_addiu(SP, SP, 12, s);
+  emit_addiu(SP, SP, 12 + arg_num * 4, s);
   emit_return(s); 
 }
 
@@ -1047,11 +1068,85 @@ void CgenNode::code_init(ostream &str){
     }
 
     init->code(str);
+    // We need to query index because we do not know how many 
+    // attrs are from ancient 
     int index = get_attr_index(feature->get_name());
     emit_store(ACC, 3 + index, S0, str);
   }
   
-  code_end(str);
+  code_end(str, 0);
+}
+
+void CgenClassTable::code_methods(){
+  for (auto *l = nds; l; l = l->tl()){
+    l->hd()->code_methods(str);
+  }
+}
+
+void CgenNode::code_methods(ostream &str){
+  // basic class is defiend in running time system
+  if (basic_status){
+    return ;
+  }
+
+  obj_table->enterscope();
+  int index = 0;
+
+  for (auto l = attrs; l; l = l->tl()){
+    obj_table->addid(
+      l->hd()->name, 
+      new ObjEntry{TYPE_ATTR, index}
+    );
+    index++;
+  }
+
+  Features features = get_features();
+
+  for (
+    int i = features->first();
+    features->more(i);
+    i = features->next(i)
+  ){
+    Feature feature = features->nth(i);
+
+    if (feature->is_method()){
+      emit_method_ref(name, feature->get_name(), str);
+      str << LABEL;
+
+      feature->code(str);
+    }
+  }
+
+  if (cgen_debug) obj_table->dump();
+
+  obj_table->exitscope();
+}
+
+void method_class::code(ostream &s){
+  code_start(s);
+
+  obj_table->enterscope();
+  // Take care!
+  int index = formals->len();
+
+  for (int i = formals->first(); 
+      formals->next(i); 
+      i = formals->next(i)){
+    Symbol name = formals->nth(i)->get_name();
+    obj_table->addid(name, new ObjEntry{TYPE_ARGS, index--});
+  }
+
+  // save space for temp vars
+  // locate temp vars using 4 + x * 4($fp)
+  int temp_count = expr->temp_count();
+  emit_addiu(SP, SP, -4 * temp_count, s);
+
+  expr->code(s);
+
+  emit_addiu(SP, SP, 4 * temp_count, s);
+
+  obj_table->exitscope();
+  code_end(s, formals->len());
 }
 
 
@@ -1095,6 +1190,8 @@ void CgenClassTable::code()
   if (cgen_debug) cout << "coding initializer" << endl;
   code_init();
 
+  if (cgen_debug) cout << "coding methods" << endl;
+  code_methods();
 }
 
 
@@ -1131,6 +1228,10 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 //*****************************************************************
 
 void assign_class::code(ostream &s) {
+  expr->code(s);
+  s << SW << ACC << " ";
+  emit_object(name, s);
+  s << endl;
 }
 
 void static_dispatch_class::code(ostream &s) {
@@ -1140,18 +1241,135 @@ void dispatch_class::code(ostream &s) {
 }
 
 void cond_class::code(ostream &s) {
+  pred->code(s);
+  
+  int then_label_index = label_index;
+  int end_label_index = label_index + 1;
+  label_index += 2;
+
+  emit_load_bool(T1, truebool, s);
+  emit_beq(T1, ACC, then_label_index, s);
+
+  // else part
+  else_exp->code(s);
+  emit_branch(end_label_index, s);
+
+  // then part
+  emit_label_def(then_label_index, s);
+  then_exp->code(s);
+
+  // end (only a label)
+  emit_label_def(end_label_index, s);
 }
 
 void loop_class::code(ostream &s) {
+  int begin_label_index = label_index;
+  int end_label_index = label_index + 1;
+  label_index += 2;
+
+  // while (**pred**)
+  emit_label_def(begin_label_index, s);
+  pred->code(s);
+  emit_load_bool(T1, falsebool, s);
+  emit_beq(T1, ACC, end_label_index, s);
+
+  // {**body**}
+  body->code(s);
+  emit_branch(begin_label_index, s);
+
+  emit_label_def(end_label_index, s);
 }
 
 void typcase_class::code(ostream &s) {
+  expr->code(s);
+  int end_label_index = label_index + cases->len();
+
+  for (int i = cases->first(); 
+      cases->more(i);
+      i = cases->next(i)){
+    Case branch = cases->nth(i);
+
+    emit_label_def(label_index, s);
+
+    // consider if I should jump to next
+    s << LW << T1 << "0(" << branch->get_type_decl()
+        << PROTOBJ_SUFFIX << ")";
+    emit_load(T2, 0, S0, s);
+    emit_bne(T1, T2, label_index + 1, s);
+
+    // add a new temp var
+    obj_table->enterscope();
+    obj_table->addid(
+        branch->get_name(), 
+        new ObjEntry{TYPE_CASE, obj_index}
+    );
+
+    // move ACC into this temp var
+    emit_store(ACC, 1 + obj_index, FP, s);
+    obj_index++;
+
+    branch->get_expr()->code(s);
+
+    obj_table->exitscope();
+    obj_index--;
+    emit_branch(end_label_index, s);
+  }
+
+  // TODO: add branch no choice error
+
+  emit_label_def(end_label_index, s);
 }
 
 void block_class::code(ostream &s) {
+  for (int i = body->first(); 
+      body->more(i);
+      i = body->next(i))
+  {
+    Expression one_expr = body->nth(i);
+
+    one_expr->code(s);
+  }
 }
 
 void let_class::code(ostream &s) {
+  obj_table->enterscope();
+  obj_table->addid(identifier, new ObjEntry{TYPE_LET, obj_index});
+  
+
+  if (init->is_no_expr()){// set default value for this temp var
+    if (equal_Symbol(type_decl, Str)){ // if is a String
+      emit_load_string(T1, stringtable.lookup_string(""), s);
+      emit_store(T1, 1 + obj_index, FP, s);
+    } 
+    else {  // If is a Int
+      if (equal_Symbol(type, Int)){
+        emit_load_int(T1, inttable.lookup_string("0"), s);
+        emit_store(T1, 1 + obj_index, FP, s);
+      } 
+      else {  // If is a Bool
+        if (equal_Symbol(type, Bool)){
+          emit_load_bool(T1, falsebool, s);
+          emit_store(T1, 1 + obj_index, FP, s);
+        } 
+        else {
+          emit_load_imm(T1, 0, s);
+          emit_store(T1, 1 + obj_index, FP, s);
+        }
+      }
+    }
+  }
+  // Like Assign, init and move in
+  else {
+    init->code(s);
+    emit_store(ACC, 1 + obj_index, FP, s);
+  }
+
+  obj_index++;
+
+  body->code(s); // execute
+
+  obj_table->exitscope();
+  obj_index--;
 }
 
 void plus_class::code(ostream &s) {

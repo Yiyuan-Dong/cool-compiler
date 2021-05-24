@@ -37,8 +37,15 @@ class A {
         1 < 2;
         isvoid 123456;
         new SELF_TYPE;
+        c <- 123;
       }
   };
+
+  g() : Object{ {
+    d <- new Main;
+    c <- d;
+    let a : A in a;
+  } };
 };
 
 class B inherits A{
