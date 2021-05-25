@@ -458,7 +458,7 @@ public:
          SEMANT_ERROR << "Can not use SELF_TYPE in branch" << endl;
          obj_env->addid(name, Object);
       } else {
-         if (!find_symbol(type_decl) < 0){
+         if (!(find_symbol(type_decl) < 0)){
             SEMANT_ERROR << "Unknown declared type: " 
                << type_decl->get_string() << endl;
             obj_env->addid(name, Object);
@@ -496,6 +496,10 @@ public:
    void dump(ostream& stream, int n);
    bool type_check_and_set(Class_ class_, SymTbl obj_env){
       expr->type_check_and_set(class_, obj_env);
+
+      if (is_same_type(name, self)){
+         SEMANT_ERROR << "Can not assign to self" << endl;
+      }
 
       Symbol type = obj_env->lookup(name);
       if (!type){
