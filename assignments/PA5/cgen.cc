@@ -1278,6 +1278,9 @@ void loop_class::code(ostream &s) {
   emit_branch(begin_label_index, s);
 
   emit_label_def(end_label_index, s);
+
+  // return void
+  emit_load_imm(ACC, 0, s);
 }
 
 void typcase_class::code(ostream &s) {
@@ -1315,7 +1318,7 @@ void typcase_class::code(ostream &s) {
     emit_branch(end_label_index, s);
   }
 
-  // TODO: add branch no choice error
+  // TODO: add branch no choice error and branch on void
 
   emit_label_def(end_label_index, s);
 }
@@ -1332,11 +1335,16 @@ void block_class::code(ostream &s) {
 }
 
 void let_class::code(ostream &s) {
+  // should execute before new var is added into env
+  if (!init->is_no_expr()){
+    init->code(s);
+  }
+
   obj_table->enterscope();
   obj_table->addid(identifier, new ObjEntry{TYPE_LET, obj_index});
-  
 
-  if (init->is_no_expr()){// set default value for this temp var
+  // set default value for this temp var
+  if (init->is_no_expr()){
     if (equal_Symbol(type_decl, Str)){ // if is a String
       emit_load_string(T1, stringtable.lookup_string(""), s);
       emit_store(T1, 1 + obj_index, FP, s);
@@ -1357,10 +1365,9 @@ void let_class::code(ostream &s) {
         }
       }
     }
-  }
-  // Like Assign, init and move in
+  }  
+  // like Assign, init and move in
   else {
-    init->code(s);
     emit_store(ACC, 1 + obj_index, FP, s);
   }
 
@@ -1373,30 +1380,190 @@ void let_class::code(ostream &s) {
 }
 
 void plus_class::code(ostream &s) {
+  // store left expr at stack
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  // copy right expr (will be use as result)
+  e2->code(s);
+  s << JAL << "Object.copy" << endl;
+  obj_index--;
+
+  // calculate arith result
+  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  emit_add(T1, T2, T3, s);
+
+  // store arith result
+  emit_store(T1, 3, ACC, s);
 }
 
 void sub_class::code(ostream &s) {
+    // store left expr at stack
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  // copy right expr (will be use as result)
+  e2->code(s);
+  s << JAL << "Object.copy" << endl;
+  obj_index--;
+
+  // calculate arith result
+  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  emit_sub(T1, T2, T3, s);
+
+  // store arith result
+  emit_store(T1, 3, ACC, s);
 }
 
 void mul_class::code(ostream &s) {
+    // store left expr at stack
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  // copy right expr (will be use as result)
+  e2->code(s);
+  s << JAL << "Object.copy" << endl;
+  obj_index--;
+
+  // calculate arith result
+  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  emit_mul(T1, T2, T3, s);
+
+  // store arith result
+  emit_store(T1, 3, ACC, s);
 }
 
 void divide_class::code(ostream &s) {
+    // store left expr at stack
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  // copy right expr (will be use as result)
+  e2->code(s);
+  s << JAL << "Object.copy" << endl;
+
+  // calculate arith result
+  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  emit_div(T1, T2, T3, s);
+  obj_index--;
+
+  // store arith result
+  emit_store(T1, 3, ACC, s);
 }
 
 void neg_class::code(ostream &s) {
+  e1->code(s);
+  emit_load(T1, 3, ACC, s);
+  emit_neg(T1, T1, s);
+  emit_store(T1, 3, ACC, s);
 }
 
 void lt_class::code(ostream &s) {
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  e2->code(s);
+
+  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  obj_index--;
+
+  emit_load_bool(ACC, truebool, s);
+  emit_blt(T2, T3, label_index, s);
+  emit_load_bool(ACC, falsebool, s);
+  emit_label_def(label_index, s);
+  label_index++;
 }
 
 void eq_class::code(ostream &s) {
+  Symbol type = e1->get_type();
+
+  if (
+    equal_Symbol(type, Int) ||
+    equal_Symbol(type, Str) ||
+    equal_Symbol(type, Bool)
+  )
+  // For Int, Bool, String: should check value
+  {
+    e1->code(s);
+    emit_store(ACC, 1 + obj_index, FP, s);
+    obj_index++;
+
+    e2->code(s);
+
+    // call `equality_test`
+    emit_store(T1, 1 + obj_index - 1, FP, s);
+    emit_move(T2, ACC, s);
+    obj_index--;
+    emit_load_bool(ACC, truebool, s);
+    emit_beq(T1, T2, label_index, s); // If have same ptr, must be equal
+    emit_load_bool(A1, falsebool, s);
+    emit_jal("equality_test", s);
+
+    emit_label_def(label_index, s);
+    label_index++;
+  }
+  // For others, just check if has same ptr
+  else{
+    e1->code(s);
+    emit_store(ACC, 1 + obj_index, FP, s);
+    obj_index++;
+
+    e2->code(s);
+
+    emit_store(T1, 1 + obj_index - 1, FP, s);
+    emit_move(T2, ACC, s);
+    emit_load_bool(ACC, truebool, s);
+    emit_beq(T1, T2, label_index, s);
+    emit_load_bool(ACC, falsebool, s);
+    
+    emit_label_def(label_index, s);
+    label_index++;
+  }
+
 }
 
 void leq_class::code(ostream &s) {
+  e1->code(s);
+  emit_store(ACC, 1 + obj_index, FP, s);
+  obj_index++;
+
+  e2->code(s);
+
+  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T2, 3, T1, s);
+  emit_load(T3, 3, ACC, s);
+  obj_index--;
+
+  emit_load_bool(ACC, truebool, s);
+  emit_bleq(T2, T3, label_index, s);
+  emit_load_bool(ACC, falsebool, s);
+  emit_label_def(label_index, s);
+  label_index++;
 }
 
 void comp_class::code(ostream &s) {
+  e1->code(s);
+  emit_load(T1, 3, ACC, s);
+  emit_load_bool(ACC, truebool, s);
+  emit_beqz(T1, label_index, s);
+  emit_load_bool(ACC, falsebool, s);
+  emit_label_def(label_index, s);
+  label_index++;
 }
 
 void int_const_class::code(ostream& s)  
@@ -1435,13 +1602,19 @@ void isvoid_class::code(ostream &s) {
 }
 
 void no_expr_class::code(ostream &s) {
+  return ;
 }
 
 void object_class::code(ostream &s) {
-
+  s << LW << ACC << " "; 
+  emit_object(name, s);
+  s << endl;
 }
 
-// temp count
+/************************
+ *      temp count
+ ************************/
+
 int assign_class::temp_count() {
   return expr->temp_count();
 }

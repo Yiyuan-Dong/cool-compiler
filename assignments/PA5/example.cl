@@ -34,10 +34,17 @@ class A {
         b;
         c;
         a + b + c + 1;
+        3 - 4 + ~5 - 6 + 7;
         1 < 2;
         isvoid 123456;
         new SELF_TYPE;
         c <- 123;
+        "12345" = "12345";
+        "12345" = (new IO).in_string();
+        let temp:Bool in {
+          temp <- new Bool;
+          temp <- not temp;
+        };
       }
   };
 
