@@ -1255,8 +1255,11 @@ void assign_class::code(ostream &s) {
 }
 
 void handle_dispatch_abort(int lineno, Symbol filename, ostream& s){
+  // check if is void
   emit_bne(ACC, ZERO, label_index, s);
-  emit_load_address(ACC, filename->get_string(), s);
+
+  StringEntry *entry = stringtable.lookup_string(filename->get_string());
+  emit_load_string(ACC, entry, s);
   emit_load_imm(T1, lineno, s);
   emit_jal("_dispatch_abort", s);
 
@@ -1367,6 +1370,19 @@ void loop_class::code(ostream &s) {
 
 void typcase_class::code(ostream &s) {
   expr->code(s);
+
+  // check dispatch on void
+  emit_bne(ACC, ZERO, label_index, s);
+
+  StringEntry *entry = stringtable.lookup_string(curr_filename->get_string());
+  emit_load_string(ACC, entry, s);
+  emit_load_imm(T1, get_line_number(), s);
+  emit_jal("_case_abort2", s);
+
+  emit_label_def(label_index, s);
+  label_index++;
+
+
   int end_label_index = label_index + cases->len();
 
   for (int i = cases->first(); 
@@ -1379,7 +1395,7 @@ void typcase_class::code(ostream &s) {
     // consider if I should jump to next
     s << LW << T1 << "0(" << branch->get_type_decl()
         << PROTOBJ_SUFFIX << ")";
-    emit_load(T2, 0, S0, s);
+    emit_load(T2, 0, ACC, s);
     emit_bne(T1, T2, label_index + 1, s);
 
     // add a new temp var
@@ -1400,8 +1416,13 @@ void typcase_class::code(ostream &s) {
     emit_branch(end_label_index, s);
   }
 
-  // TODO: add branch no choice error and branch on void
+  // If reachs here, means statement has no match
+  // Object should already be put in ACC, so the
+  // only thing we need to do is call `_case_abort`
+  
+  s << JAL << "_case_abort" << endl;
 
+  // Normally should directy jump to here
   emit_label_def(end_label_index, s);
 }
 
@@ -1667,11 +1688,31 @@ void bool_const_class::code(ostream& s)
 }
 
 void new__class::code(ostream &s) {
-  // TODO: new SELF_TYPE is totally different!
+  // new SELF_TYPE
+  if (equal_Symbol(type_name, SELF_TYPE)){
+    // We should:
+    // 1. find self_protObj in objTab
+    // 2. Object.copy
+    // 3. call self.init
 
-  s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
-  s << JAL << "Object.copy" << endl;
-  s << JAL << type_name << CLASSINIT_SUFFIX << endl;
+    emit_load_address(T1, CLASSOBJTAB, s);
+    emit_load(T2, 0, S0, s);
+    emit_sll(T2, T2, 3, s);
+    emit_addu(T1, T1, T2, s);
+    emit_move(S1, T1, s); // S1 can kept through func call
+
+    emit_load(ACC, 0, S1, s);  // put SELF_protObj into ACC
+    emit_jal("Object.copy", s);
+
+    emit_load(T1, 1, S1, s);
+    emit_jalr(T1, s);
+  }
+  else{
+    s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
+    s << JAL << "Object.copy" << endl;
+    s << JAL << type_name << CLASSINIT_SUFFIX << endl;
+  }
+
 }
 
 void isvoid_class::code(ostream &s) {

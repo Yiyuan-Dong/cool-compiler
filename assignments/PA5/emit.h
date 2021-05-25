@@ -75,6 +75,7 @@
 #define FP   "$fp"		// Frame pointer 
 #define RA   "$ra"		// Return address 
 #define S0   "$s0"
+#define S1   "$s1"      // Dyy add
 //
 // Opcodes
 //
