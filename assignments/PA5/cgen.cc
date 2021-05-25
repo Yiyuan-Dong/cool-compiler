@@ -29,11 +29,12 @@ extern void emit_string_constant(ostream& str, char *s);
 extern int cgen_debug;
 
 // Newly added
-SymbolTable<Symbol, ObjEntry> *obj_table = NULL;
+SymbolTable<Symbol, ObjEntry> *obj_table = new SymbolTable<Symbol, ObjEntry>();
 CgenClassTable *table_ptr = NULL;
 int obj_index = 0;
 int label_index = 0;
-Symbol curr_filename = NULL;
+Symbol current_filename = NULL;
+Symbol current_class = NULL;
 
 int max(int x, int y){
   return x > y ? x : y;
@@ -238,7 +239,7 @@ static void emit_sll(char *dest, char *src1, int num, ostream& s)
 static void emit_jalr(char *dest, ostream& s)
 { s << JALR << "\t" << dest << endl; }
 
-static void emit_jal(char *address,ostream &s)
+static void emit_jal(char *address, ostream &s)
 { s << JAL << address << endl; }
 
 static void emit_return(ostream& s)
@@ -370,6 +371,7 @@ static void get_args(char *dest, int index, int length, ostream &s){
   emit_load(dest, offset, FP, s);
 }
 
+// can not deal with `self` !
 static void emit_object(Symbol name, ostream &s){
   auto obj_entry_ptr = obj_table->lookup(name);
   assert(obj_entry_ptr);
@@ -377,17 +379,17 @@ static void emit_object(Symbol name, ostream &s){
   switch (obj_entry_ptr->type)
   {
   case TYPE_ARGS:
-    s << "-" << obj_entry_ptr->index * 4 + 8 << "($fp)";
+    s << obj_entry_ptr->index * 4 + 8 << "($fp)";
     break;
   case TYPE_ATTR:
     s << obj_entry_ptr->index * 4 + 12 << "($s0)";
     break;
   case TYPE_CASE:
   case TYPE_LET:
-    s << obj_entry_ptr->index * 4 + 4 << "($fp)"; 
+    s << "-" << obj_entry_ptr->index * 4 - 4 << "($fp)"; 
     break;
   default:
-    assert(true);
+    assert(false);
   }
 }
 
@@ -956,8 +958,6 @@ void CgenNode::code_prototype_object(ostream &s, int index){
         }
       }
     }
-    
-    
   }
 }
 
@@ -1016,7 +1016,7 @@ void code_start(ostream& s){
 }
 
 void code_end(ostream& s, int arg_num) {
-  emit_move(ACC, S0, s);
+  // emit_move(ACC, S0, s);  No need! Use last expr as return 
   emit_load(FP, 3, SP, s);
   emit_load(S0, 2, SP, s);
   emit_load(RA, 1, SP, s);
@@ -1040,12 +1040,13 @@ int CgenNode::get_attr_index(Symbol name){
   }
 
   // Should never go here !!!
-  assert(true);
+  assert(false);
   return -1;
 }
 
 int CgenNode::get_method_index(Symbol name){
-    int count = 0;
+  int count = 0;
+  
   for (auto l = dispatch_table; l; l = l->tl()){
     if (equal_Symbol(l->hd()->func_name, name)){
       return count;
@@ -1054,7 +1055,7 @@ int CgenNode::get_method_index(Symbol name){
   }
 
   // Should never go here !!!
-  assert(true);
+  assert(false);
   return -1;
 }
 
@@ -1095,17 +1096,23 @@ void CgenNode::code_init(ostream &str){
 
 void CgenClassTable::code_methods(){
   for (auto *l = nds; l; l = l->tl()){
+    if (cgen_debug){
+      cout << "  class: " << l->hd()->get_name() << endl;
+    }
+
     l->hd()->code_methods(str);
   }
 }
 
 void CgenNode::code_methods(ostream &str){
   // basic class is defiend in running time system
-  if (basic_status){
+  if (basic_status == Basic){
     return ;
   }
 
-  curr_filename = filename;
+  current_filename = filename;
+  current_class = name;
+
   obj_table->enterscope();
   int index = 0;
 
@@ -1127,41 +1134,48 @@ void CgenNode::code_methods(ostream &str){
     Feature feature = features->nth(i);
 
     if (feature->is_method()){
+      if (cgen_debug){
+        cout << "    method: " << feature->get_name() << endl;
+      }
       emit_method_ref(name, feature->get_name(), str);
       str << LABEL;
-
       feature->code(str);
     }
   }
 
-  if (cgen_debug) obj_table->dump();
+  // if (cgen_debug) obj_table->dump();
 
   obj_table->exitscope();
 }
 
 void method_class::code(ostream &s){
-  code_start(s);
 
   obj_table->enterscope();
   // Take care!
   int index = formals->len();
 
   for (int i = formals->first(); 
-      formals->next(i); 
+      formals->more(i); 
       i = formals->next(i)){
     Symbol name = formals->nth(i)->get_name();
     obj_table->addid(name, new ObjEntry{TYPE_ARGS, index--});
   }
 
+  code_start(s);
+
   // save space for temp vars
   // locate temp vars using 4 + x * 4($fp)
   int temp_count = expr->temp_count();
-  emit_addiu(SP, SP, -4 * temp_count, s);
+  if (temp_count > 0){
+    emit_addiu(SP, SP, -4 * temp_count, s);
+  }
 
   expr->code(s);
 
   // pop stack up
-  emit_addiu(SP, SP, 4 * temp_count, s);
+  if (temp_count > 0){
+    emit_addiu(SP, SP, 4 * temp_count, s);
+  }
 
   obj_table->exitscope();
   code_end(s, formals->len());
@@ -1250,6 +1264,8 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
 void assign_class::code(ostream &s) {
   expr->code(s);
   s << SW << ACC << " ";
+  
+  // Luckily we cannot assign to self 
   emit_object(name, s);
   s << endl;
 }
@@ -1280,9 +1296,9 @@ void static_dispatch_class::code(ostream &s) {
     emit_push(ACC, s);
   }
 
-  // generate e0 (expr)
+  // generate e0 (expr), now $a0 is `self` for dispatch func
   expr->code(s);
-  handle_dispatch_abort(line_number, curr_filename, s);
+  handle_dispatch_abort(line_number, current_filename, s);
 
   auto node_ptr = table_ptr->lookup(type_name);
   int offset = node_ptr->get_method_index(name);
@@ -1306,23 +1322,38 @@ void dispatch_class::code(ostream &s) {
     i = actual->next(i)
   )
   {
-    Expression expr = actual->nth(i);
-    expr->code(s);
+    Expression arg_expr = actual->nth(i);
+    arg_expr->code(s);
     emit_push(ACC, s);
   }
 
-  // generate e0 (expr)
+  // generate e0 (expr), now $a0 is `self` for dispatch func
   expr->code(s);
-  handle_dispatch_abort(line_number, curr_filename, s);
+  handle_dispatch_abort(line_number, current_filename, s);
 
-  auto node_ptr = table_ptr->lookup(get_type());
+  Symbol expr_type = expr->get_type();
+  CgenNodeP node_ptr = NULL;
+  if (equal_Symbol(expr_type, SELF_TYPE)){
+    node_ptr = table_ptr->lookup(current_class);
+  }
+  else {
+    node_ptr = table_ptr->lookup(expr_type);
+  }
+  
+  assert(node_ptr);
   int offset = node_ptr->get_method_index(name);
 
   // In dynamic dispatch we should use the dispatch
-  // table of that object 
+  // table of `the` object 
   emit_load(T1, 2, ACC, s);
   emit_load(T1, offset, T1, s);
   emit_jalr(T1, s);
+}
+
+void equal_test(ostream& s){
+  emit_load_bool(ACC, truebool, s);
+  emit_load_bool(A1, falsebool, s);
+  emit_jal("equality_test", s);
 }
 
 void cond_class::code(ostream &s) {
@@ -1332,6 +1363,11 @@ void cond_class::code(ostream &s) {
   int end_label_index = label_index + 1;
   label_index += 2;
 
+  emit_load_bool(T1, truebool, s);
+  emit_beq(T1, ACC, then_label_index, s);
+  // Formal test
+  emit_move(T2, ACC, s);
+  equal_test(s);
   emit_load_bool(T1, truebool, s);
   emit_beq(T1, ACC, then_label_index, s);
 
@@ -1357,6 +1393,10 @@ void loop_class::code(ostream &s) {
   pred->code(s);
   emit_load_bool(T1, falsebool, s);
   emit_beq(T1, ACC, end_label_index, s);
+  emit_move(T2, ACC, s);
+  equal_test(s);
+  emit_load_bool(T1, falsebool, s);
+  emit_beq(T1, ACC, end_label_index, s);
 
   // {**body**}
   body->code(s);
@@ -1374,7 +1414,7 @@ void typcase_class::code(ostream &s) {
   // check dispatch on void
   emit_bne(ACC, ZERO, label_index, s);
 
-  StringEntry *entry = stringtable.lookup_string(curr_filename->get_string());
+  StringEntry *entry = stringtable.lookup_string(current_filename->get_string());
   emit_load_string(ACC, entry, s);
   emit_load_imm(T1, get_line_number(), s);
   emit_jal("_case_abort2", s);
@@ -1406,7 +1446,7 @@ void typcase_class::code(ostream &s) {
     );
 
     // move ACC into this temp var
-    emit_store(ACC, 1 + obj_index, FP, s);
+    emit_store(ACC, -(1 + obj_index), FP, s);
     obj_index++;
 
     branch->get_expr()->code(s);
@@ -1419,8 +1459,8 @@ void typcase_class::code(ostream &s) {
   // If reachs here, means statement has no match
   // Object should already be put in ACC, so the
   // only thing we need to do is call `_case_abort`
-  
-  s << JAL << "_case_abort" << endl;
+
+  emit_jal("_case_abort", s);
 
   // Normally should directy jump to here
   emit_label_def(end_label_index, s);
@@ -1432,7 +1472,6 @@ void block_class::code(ostream &s) {
       i = body->next(i))
   {
     Expression one_expr = body->nth(i);
-
     one_expr->code(s);
   }
 }
@@ -1450,28 +1489,28 @@ void let_class::code(ostream &s) {
   if (init->is_no_expr()){
     if (equal_Symbol(type_decl, Str)){ // if is a String
       emit_load_string(T1, stringtable.lookup_string(""), s);
-      emit_store(T1, 1 + obj_index, FP, s);
+      emit_store(T1, -(1 + obj_index), FP, s);
     } 
     else {  // If is a Int
       if (equal_Symbol(type, Int)){
         emit_load_int(T1, inttable.lookup_string("0"), s);
-        emit_store(T1, 1 + obj_index, FP, s);
+        emit_store(T1, -(1 + obj_index), FP, s);
       } 
       else {  // If is a Bool
         if (equal_Symbol(type, Bool)){
           emit_load_bool(T1, falsebool, s);
-          emit_store(T1, 1 + obj_index, FP, s);
+          emit_store(T1, -(1 + obj_index), FP, s);
         } 
-        else {
+        else {  // set a void
           emit_load_imm(T1, 0, s);
-          emit_store(T1, 1 + obj_index, FP, s);
+          emit_store(T1, -(1 + obj_index), FP, s);
         }
       }
     }
   }  
   // like Assign, init and move in
   else {
-    emit_store(ACC, 1 + obj_index, FP, s);
+    emit_store(ACC, -(1 + obj_index), FP, s);
   }
 
   obj_index++;
@@ -1485,7 +1524,7 @@ void let_class::code(ostream &s) {
 void plus_class::code(ostream &s) {
   // store left expr at stack
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   // copy right expr (will be use as result)
@@ -1494,7 +1533,7 @@ void plus_class::code(ostream &s) {
   obj_index--;
 
   // calculate arith result
-  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T1, -(1 + obj_index), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   emit_add(T1, T2, T3, s);
@@ -1506,7 +1545,7 @@ void plus_class::code(ostream &s) {
 void sub_class::code(ostream &s) {
     // store left expr at stack
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   // copy right expr (will be use as result)
@@ -1515,7 +1554,7 @@ void sub_class::code(ostream &s) {
   obj_index--;
 
   // calculate arith result
-  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T1, -(1 + obj_index), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   emit_sub(T1, T2, T3, s);
@@ -1527,7 +1566,7 @@ void sub_class::code(ostream &s) {
 void mul_class::code(ostream &s) {
     // store left expr at stack
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   // copy right expr (will be use as result)
@@ -1536,7 +1575,7 @@ void mul_class::code(ostream &s) {
   obj_index--;
 
   // calculate arith result
-  emit_load(T1, 1 + obj_index, FP, s);
+  emit_load(T1, -(1 + obj_index), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   emit_mul(T1, T2, T3, s);
@@ -1548,7 +1587,7 @@ void mul_class::code(ostream &s) {
 void divide_class::code(ostream &s) {
     // store left expr at stack
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   // copy right expr (will be use as result)
@@ -1556,7 +1595,7 @@ void divide_class::code(ostream &s) {
   s << JAL << "Object.copy" << endl;
 
   // calculate arith result
-  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T1, -(1 + obj_index) - 1, FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   emit_div(T1, T2, T3, s);
@@ -1575,12 +1614,12 @@ void neg_class::code(ostream &s) {
 
 void lt_class::code(ostream &s) {
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   e2->code(s);
 
-  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T1, -(1 + obj_index) - 1, FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   obj_index--;
@@ -1603,13 +1642,13 @@ void eq_class::code(ostream &s) {
   // For Int, Bool, String: should check value
   {
     e1->code(s);
-    emit_store(ACC, 1 + obj_index, FP, s);
+    emit_store(ACC, -(1 + obj_index), FP, s);
     obj_index++;
 
     e2->code(s);
 
     // call `equality_test`
-    emit_store(T1, 1 + obj_index - 1, FP, s);
+    emit_store(T1, -(1 + obj_index) - 1, FP, s);
     emit_move(T2, ACC, s);
     obj_index--;
     emit_load_bool(ACC, truebool, s);
@@ -1623,12 +1662,12 @@ void eq_class::code(ostream &s) {
   // For others, just check if has same ptr
   else{
     e1->code(s);
-    emit_store(ACC, 1 + obj_index, FP, s);
+    emit_store(ACC, -(1 + obj_index), FP, s);
     obj_index++;
 
     e2->code(s);
 
-    emit_store(T1, 1 + obj_index - 1, FP, s);
+    emit_store(T1, -(1 + obj_index) - 1, FP, s);
     emit_move(T2, ACC, s);
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, T2, label_index, s);
@@ -1642,12 +1681,12 @@ void eq_class::code(ostream &s) {
 
 void leq_class::code(ostream &s) {
   e1->code(s);
-  emit_store(ACC, 1 + obj_index, FP, s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
   obj_index++;
 
   e2->code(s);
 
-  emit_load(T1, 1 + obj_index - 1, FP, s);
+  emit_load(T1, -(1 + obj_index) - 1, FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   obj_index--;
@@ -1704,8 +1743,8 @@ void new__class::code(ostream &s) {
     emit_load(ACC, 0, S1, s);  // put SELF_protObj into ACC
     emit_jal("Object.copy", s);
 
-    emit_load(T1, 1, S1, s);
-    emit_jalr(T1, s);
+    emit_load(T1, 1, S1, s);  // put self.init into T1
+    emit_jalr(T1, s); 
   }
   else{
     s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
@@ -1729,11 +1768,12 @@ void no_expr_class::code(ostream &s) {
 }
 
 void object_class::code(ostream &s) {
+  // self is not in env!
   if (equal_Symbol(name, self)){
     emit_move(ACC, S0, s);
   }
   else{
-    s << LW << ACC << " "; 
+    s << LA << ACC << " "; 
     emit_object(name, s);
     s << endl;
   }
@@ -1750,7 +1790,6 @@ int assign_class::temp_count() {
 // we still use stack push and pop for dispatch.
 // That means, the result of each args should not be counted
 // in the temp vars
- 
 int static_dispatch_class::temp_count() {
   int maximum = expr->temp_count();
   for (int i = actual->first(); actual->more(i); i = actual->next(i)){
