@@ -30,8 +30,10 @@ extern int cgen_debug;
 
 // Newly added
 SymbolTable<Symbol, ObjEntry> *obj_table = NULL;
+CgenClassTable *table_ptr = NULL;
 int obj_index = 0;
 int label_index = 0;
+Symbol curr_filename = NULL;
 
 int max(int x, int y){
   return x > y ? x : y;
@@ -1030,8 +1032,22 @@ void CgenClassTable::code_init(){
 
 int CgenNode::get_attr_index(Symbol name){
   int count = 0;
-  for (List<AttrEntry> *l = attrs; l; l = l->tl()){
+  for (auto l = attrs; l; l = l->tl()){
     if (equal_Symbol(l->hd()->name, name)){
+      return count;
+    }
+    count++;
+  }
+
+  // Should never go here !!!
+  assert(true);
+  return -1;
+}
+
+int CgenNode::get_method_index(Symbol name){
+    int count = 0;
+  for (auto l = dispatch_table; l; l = l->tl()){
+    if (equal_Symbol(l->hd()->func_name, name)){
       return count;
     }
     count++;
@@ -1089,6 +1105,7 @@ void CgenNode::code_methods(ostream &str){
     return ;
   }
 
+  curr_filename = filename;
   obj_table->enterscope();
   int index = 0;
 
@@ -1143,6 +1160,7 @@ void method_class::code(ostream &s){
 
   expr->code(s);
 
+  // pop stack up
   emit_addiu(SP, SP, 4 * temp_count, s);
 
   obj_table->exitscope();
@@ -1152,6 +1170,8 @@ void method_class::code(ostream &s){
 
 void CgenClassTable::code()
 {
+  table_ptr = this; 
+
   if (cgen_debug) cout << "coding global data" << endl;
   code_global_data();
 
@@ -1234,10 +1254,72 @@ void assign_class::code(ostream &s) {
   s << endl;
 }
 
+void handle_dispatch_abort(int lineno, Symbol filename, ostream& s){
+  emit_bne(ACC, ZERO, label_index, s);
+  emit_load_address(ACC, filename->get_string(), s);
+  emit_load_imm(T1, lineno, s);
+  emit_jal("_dispatch_abort", s);
+
+  emit_label_def(label_index, s);
+  label_index++;
+}
+
 void static_dispatch_class::code(ostream &s) {
+  // Push args
+  for (
+    int i = actual->first();
+    actual->more(i);
+    i = actual->next(i)
+  )
+  {
+    Expression expr = actual->nth(i);
+    expr->code(s);
+    emit_push(ACC, s);
+  }
+
+  // generate e0 (expr)
+  expr->code(s);
+  handle_dispatch_abort(line_number, curr_filename, s);
+
+  auto node_ptr = table_ptr->lookup(type_name);
+  int offset = node_ptr->get_method_index(name);
+
+  // The key of static dispatch is we should use 
+  // the dispatch table in declared type's prototype obj
+  s << LW << T1 << " " ;
+  emit_protobj_ref(type_name, s);
+  s << endl;
+
+  emit_load(T1, 2, T1, s);
+  emit_load(T1, offset, T1, s);
+  emit_jalr(T1, s);
 }
 
 void dispatch_class::code(ostream &s) {
+    // Push args
+  for (
+    int i = actual->first();
+    actual->more(i);
+    i = actual->next(i)
+  )
+  {
+    Expression expr = actual->nth(i);
+    expr->code(s);
+    emit_push(ACC, s);
+  }
+
+  // generate e0 (expr)
+  expr->code(s);
+  handle_dispatch_abort(line_number, curr_filename, s);
+
+  auto node_ptr = table_ptr->lookup(get_type());
+  int offset = node_ptr->get_method_index(name);
+
+  // In dynamic dispatch we should use the dispatch
+  // table of that object 
+  emit_load(T1, 2, ACC, s);
+  emit_load(T1, offset, T1, s);
+  emit_jalr(T1, s);
 }
 
 void cond_class::code(ostream &s) {
@@ -1606,9 +1688,14 @@ void no_expr_class::code(ostream &s) {
 }
 
 void object_class::code(ostream &s) {
-  s << LW << ACC << " "; 
-  emit_object(name, s);
-  s << endl;
+  if (equal_Symbol(name, self)){
+    emit_move(ACC, S0, s);
+  }
+  else{
+    s << LW << ACC << " "; 
+    emit_object(name, s);
+    s << endl;
+  }
 }
 
 /************************

@@ -104,6 +104,7 @@ public:
    void fetch_attrs(CgenNodeP current_class);
    void code_init(ostream &str);
    int get_attr_index(Symbol name);
+   int get_method_index(Symbol name);
    void code_methods(ostream &str);
 };
 
