@@ -56,10 +56,10 @@ Class Main inherits Object{
 
       -- String
       (new IO).out_string(attr_string);
-      attr_string <- "Test Pass\n";
+      attr_string <- "Pass\n";
       attr_io.out_string(attr_string);
 
-      let temp_string : String <- "Pass Again\n" in {
+      let temp_string : String <- "Pass\n" in {
         attr_io.out_string(temp_string);
         print_int(temp_string.length());
         attr_string <- temp_string;
@@ -90,9 +90,13 @@ Class Main inherits Object{
       then attr_io.out_string("OK\n")
       else attr_io.out_string("??\n")
       fi; 
+    }
+  };
 
+  logic_test() : Object{
+    {
       attr_io.out_string("\nCompare\n");
-      
+
       -- compare
       attr_int1 <- 110;
       if attr_int1 < 100
@@ -135,12 +139,89 @@ Class Main inherits Object{
       then attr_io.out_string("OK\n")
       else attr_io.out_string("??\n")
       fi;
+
+      attr_int1 <- 100;
+      if attr_int1 + attr_int1 + 100 + attr_int1 = 400
+      then attr_io.out_string("OK\n")
+      else attr_io.out_string("??\n")
+      fi;
+
+      if attr_int1 = 100 + ~100 * 3 + 300
+      then {attr_io.out_string("OK\n"); attr_io.out_string("OK\n"); attr_io.out_string("OK\n"); }
+      else attr_io.out_string("??\n")
+      fi;
+
+      -- Loop
+      attr_io.out_string("\nLoop\n");
+
+      attr_int1 <- 100;
+      let count : Int in {
+        while attr_int1 <= 1000 loop
+        {
+          attr_io.out_int(count);
+          attr_io.out_string(" ");
+          attr_int1 <- attr_int1 + 100;
+          count <- count + 1;
+        }
+        pool;
+
+        if count = 10
+        then attr_io.out_string("OK\n")
+        else attr_io.out_string("??\n")
+        fi;
+
+        count <- 0;
+        attr_int1 <- 100;
+        while attr_int1 = 100 loop
+        {
+          attr_io.out_int(count);
+          attr_io.out_string(" ");
+          attr_int1 <- attr_int1 + 100;
+          count <- count + 1;
+        }
+        pool;
+
+        if count = 1
+        then attr_io.out_string("OK\n")
+        else attr_io.out_string("??\n")
+        fi;
+
+        count <- 0;
+        attr_int1 <- 100;
+        while attr_int1 + count < 100 loop
+        {
+          attr_int1 <- attr_int1 + 100;
+          count <- count + 1;
+        }
+        pool;
+
+        if count = 0
+        then attr_io.out_string("OK\n")
+        else attr_io.out_string("??\n")
+        fi;
+      };
+
+      -- Branch
+      attr_io.out_string("\nBranch\n\n");
+
+      case new Int of
+        s : String => attr_io.out_string(s);
+        i : Int => attr_io.out_string("OK\n");
+        b : Bool => 1;
+      esac;
+      
+      case "glgjssy" of
+        s : String => attr_io.out_string("OK\n");
+        b : Bool => 1;
+        i : Int => attr_io.out_string("??\n");
+      esac;
     }
   };
 
   main() : Object{
     {
       basic_class_test();
+      logic_test();
     }
   };
 };

@@ -1390,7 +1390,6 @@ void loop_class::code(ostream &s) {
   // while (**pred**)
   emit_label_def(begin_label_index, s);
   pred->code(s);
-
   emit_load_bool(T1, falsebool, s);
   emit_load(T1, 3, T1, s);
   emit_load(T2, 3, ACC, s);
@@ -1422,6 +1421,7 @@ void typcase_class::code(ostream &s) {
 
   int branch_label = label_index;
   int end_label_index = label_index + cases->len();
+  label_index += cases->len() + 1;
 
   for (int i = cases->first(); 
       cases->more(i);
@@ -1430,11 +1430,12 @@ void typcase_class::code(ostream &s) {
 
     emit_label_def(branch_label, s);
 
-    // consider if I should jump to next
-    s << LW << T1 << "0(" << branch->get_type_decl()
-        << PROTOBJ_SUFFIX << ")";
+    // consider if I should jump to next, compare the class id
+    s << LA << T1 << " " <<  branch->get_type_decl()
+        << PROTOBJ_SUFFIX << endl;
+    s << LW << T1 << " " << "0(" << T1 << ")" << endl;
     emit_load(T2, 0, ACC, s);
-    emit_bne(T1, T2, branch_label++, s);
+    emit_bne(T1, T2, ++branch_label, s);
 
     // add a new temp var
     obj_table->enterscope();
