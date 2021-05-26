@@ -2,63 +2,42 @@
 (*  Example cool program testing as many aspects of the code generator
     as possible.
  *)
-class A {
-  a : Int;
-  b : Int <- 1234567;
-  c : Main;
-  d : Main <- new Main;
 
-  c(a : Int, b : Int) : Object{
-    1
-  };
+Class Main inherits Object{
+  attr_io : IO <- new IO;
+  attr_int1 : Int;
+  attr_int2 : Int <- 123;
 
-  d(a1: Int, a2 :Int, a3:Int, a4:Int, a5:Int) : Object{
+  print_int(x : Int) : Object{
     {
-      a1;
-      a2;
-      a3;
-      a4;
-      a5;
-      996;
+      (attr_io).out_int(x);
+      (new IO).out_string("\n");
     }
   };
 
-  e() : Object{
-    self.d(3,4,5,6,7)
+  basic_class_test() : Object{
+    {
+      -- Int
+      attr_io.out_string("123\n");
+      print_int(attr_int1);
+      print_int(attr_int2);
+      attr_int1 <- 456;
+      print_int(attr_int1);
+      attr_int2 <- new Int;
+      print_int(attr_int2);
+
+      -- arithmetic OP
+      print_int(996);
+      let int3 : Int, int4 : Int <- 100 in {
+        int3 <- int4 + int3 ;
+        print_int(996);
+      };
+    }
   };
 
-  f() : Object{
-    let a : Int, b : Int, c : Int in 
-      {
-        a;
-        b;
-        c;
-        a + b + c + 1;
-        3 - 4 + ~5 - 6 + 7;
-        1 < 2;
-        isvoid 123456;
-        new SELF_TYPE;
-        c <- 123;
-        "12345" = "12345";
-        "12345" = (new IO).in_string();
-        let temp:Bool in {
-          temp <- new Bool;
-          temp <- not temp;
-        };
-      }
+  main() : Object{
+    {
+      basic_class_test();
+    }
   };
-
-  g() : Object{ {
-    d <- new Main;
-    c <- d;
-    let a : A in a;
-  } };
-};
-
-class B inherits A{
-
-};
-
-class Main {
-  main():Int { 1 };
 };

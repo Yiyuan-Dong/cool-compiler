@@ -1090,6 +1090,8 @@ void CgenNode::code_init(ostream &str){
     int index = get_attr_index(feature->get_name());
     emit_store(ACC, 3 + index, S0, str);
   }
+
+  emit_move(ACC, S0, str);
   
   code_end(str, 0);
 }
@@ -1492,18 +1494,17 @@ void let_class::code(ostream &s) {
       emit_store(T1, -(1 + obj_index), FP, s);
     } 
     else {  // If is a Int
-      if (equal_Symbol(type, Int)){
+      if (equal_Symbol(type_decl, Int)){
         emit_load_int(T1, inttable.lookup_string("0"), s);
         emit_store(T1, -(1 + obj_index), FP, s);
       } 
       else {  // If is a Bool
-        if (equal_Symbol(type, Bool)){
+        if (equal_Symbol(type_decl, Bool)){
           emit_load_bool(T1, falsebool, s);
           emit_store(T1, -(1 + obj_index), FP, s);
         } 
         else {  // set a void
-          emit_load_imm(T1, 0, s);
-          emit_store(T1, -(1 + obj_index), FP, s);
+          emit_store(ZERO, -(1 + obj_index), FP, s);
         }
       }
     }
@@ -1776,7 +1777,7 @@ void object_class::code(ostream &s) {
     emit_move(ACC, S0, s);
   }
   else{
-    s << LA << ACC << " "; 
+    s << LW << ACC << " "; 
     emit_object(name, s);
     s << endl;
   }
