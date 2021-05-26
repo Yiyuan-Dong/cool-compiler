@@ -386,7 +386,7 @@ static void emit_object(Symbol name, ostream &s){
     break;
   case TYPE_CASE:
   case TYPE_LET:
-    s << "-" << obj_entry_ptr->index * 4 - 4 << "($fp)"; 
+    s << "-" << obj_entry_ptr->index * 4 + 4 << "($fp)"; 
     break;
   default:
     assert(false);
@@ -1593,13 +1593,14 @@ void divide_class::code(ostream &s) {
   // copy right expr (will be use as result)
   e2->code(s);
   s << JAL << "Object.copy" << endl;
+  obj_index--;
 
   // calculate arith result
-  emit_load(T1, -(1 + obj_index) - 1, FP, s);
+  emit_load(T1, -(1 + obj_index), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   emit_div(T1, T2, T3, s);
-  obj_index--;
+
 
   // store arith result
   emit_store(T1, 3, ACC, s);
@@ -1619,7 +1620,7 @@ void lt_class::code(ostream &s) {
 
   e2->code(s);
 
-  emit_load(T1, -(1 + obj_index) - 1, FP, s);
+  emit_load(T1, -(1 + obj_index - 1), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   obj_index--;
@@ -1648,7 +1649,7 @@ void eq_class::code(ostream &s) {
     e2->code(s);
 
     // call `equality_test`
-    emit_store(T1, -(1 + obj_index) - 1, FP, s);
+    emit_store(T1, -(1 + obj_index - 1), FP, s);
     emit_move(T2, ACC, s);
     obj_index--;
     emit_load_bool(ACC, truebool, s);
@@ -1667,7 +1668,7 @@ void eq_class::code(ostream &s) {
 
     e2->code(s);
 
-    emit_store(T1, -(1 + obj_index) - 1, FP, s);
+    emit_store(T1, -(1 + obj_index - 1), FP, s);
     emit_move(T2, ACC, s);
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, T2, label_index, s);
@@ -1686,7 +1687,7 @@ void leq_class::code(ostream &s) {
 
   e2->code(s);
 
-  emit_load(T1, -(1 + obj_index) - 1, FP, s);
+  emit_load(T1, -(1 + obj_index - 1), FP, s);
   emit_load(T2, 3, T1, s);
   emit_load(T3, 3, ACC, s);
   obj_index--;
@@ -1758,9 +1759,11 @@ void isvoid_class::code(ostream &s) {
   e1->code(s);
   emit_move(T1, ACC, s);
   emit_load_bool(ACC, truebool, s);
-  emit_beqz(T1, label_index++, s);
+  emit_beqz(T1, label_index, s);
   emit_load_bool(ACC, falsebool, s);
+
   emit_label_def(label_index, s);
+  label_index++;
 }
 
 void no_expr_class::code(ostream &s) {
