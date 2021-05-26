@@ -1137,7 +1137,7 @@ void CgenNode::code_methods(ostream &str){
 
     if (feature->is_method()){
       if (cgen_debug){
-        cout << "    method: " << feature->get_name() << endl;
+        cout << "    method: " << feature->get_name();
       }
       emit_method_ref(name, feature->get_name(), str);
       str << LABEL;
@@ -1168,6 +1168,11 @@ void method_class::code(ostream &s){
   // save space for temp vars
   // locate temp vars using 4 + x * 4($fp)
   int temp_count = expr->temp_count();
+
+  if (cgen_debug) {
+    cout << "  temp vars: " << temp_count << endl;
+  }
+
   if (temp_count > 0){
     emit_addiu(SP, SP, -4 * temp_count, s);
   }
@@ -1391,6 +1396,15 @@ void loop_class::code(ostream &s) {
   emit_label_def(begin_label_index, s);
   pred->code(s);
   emit_load_bool(T1, falsebool, s);
+
+  // emit_beq(T1, ACC, end_label_index, s); 
+  // emit_move(T2, ACC, s);    
+  // equal_test(s);      
+
+  // emit_load_bool(T1, truebool, s);    
+  // truebool means, T2 is equal to falsebool, so we jump
+
+  // emit_beq(T1, ACC, end_label_index, s);      
   emit_load(T1, 3, T1, s);
   emit_load(T2, 3, ACC, s);
   emit_beq(T1, T2, end_label_index, s);
@@ -1651,8 +1665,9 @@ void eq_class::code(ostream &s) {
 
     // call `equality_test`
     emit_load(T1, -(1 + obj_index - 1), FP, s);
-    emit_move(T2, ACC, s);
     obj_index--;
+    emit_move(T2, ACC, s);
+
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, T2, label_index, s); // If have same ptr, must be equal
     emit_load_bool(A1, falsebool, s);
@@ -1670,7 +1685,9 @@ void eq_class::code(ostream &s) {
     e2->code(s);
 
     emit_store(T1, -(1 + obj_index - 1), FP, s);
+    obj_index--;
     emit_move(T2, ACC, s);
+
     emit_load_bool(ACC, truebool, s);
     emit_beq(T1, T2, label_index, s);
     emit_load_bool(ACC, falsebool, s);

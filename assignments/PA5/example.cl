@@ -9,6 +9,17 @@ Class Main inherits Object{
   attr_int2 : Int <- 123;
   attr_string : String;
   attr_bool : Bool <- true;
+  a : A <- new A;
+  b : B <- new B;
+
+  equal_test(x : Object, y : Object) : Object{
+    {
+      if x = y
+      then attr_io.out_string("OK\n")
+      else attr_io.out_string("??\n")
+      fi;
+    }
+  };
 
   print_int(x : Int) : Object{
     {
@@ -33,7 +44,10 @@ Class Main inherits Object{
       -- arithmetic OP and let
       let int3 : Int, int4 : Int <- 100 in {
         -- 100 + 0 - 456 + 100 = -256
-        int3 <- int4 + int3 - attr_int1 + int4;  
+        print_int(int3);
+        print_int(int4);
+        9999;
+        int3 <- int4 + int3;
         
         print_int(int3);
 
@@ -165,10 +179,7 @@ Class Main inherits Object{
         }
         pool;
 
-        if count = 10
-        then attr_io.out_string("OK\n")
-        else attr_io.out_string("??\n")
-        fi;
+        equal_test(count, 10);
 
         count <- 0;
         attr_int1 <- 100;
@@ -181,10 +192,7 @@ Class Main inherits Object{
         }
         pool;
 
-        if count = 1
-        then attr_io.out_string("OK\n")
-        else attr_io.out_string("??\n")
-        fi;
+        equal_test(count, 1);
 
         count <- 0;
         attr_int1 <- 100;
@@ -195,10 +203,7 @@ Class Main inherits Object{
         }
         pool;
 
-        if count = 0
-        then attr_io.out_string("OK\n")
-        else attr_io.out_string("??\n")
-        fi;
+        equal_test(count, 0);
       };
 
       -- Branch
@@ -218,10 +223,100 @@ Class Main inherits Object{
     }
   };
 
+  class_and_dispatch_test() : Object{
+    {
+      attr_io.out_string("\nClass and dispatch\n\n");
+
+      a.set(1, 2);
+      equal_test(a.geta1(), 1);
+      equal_test(b.geta1(), 0);
+
+      b.set(4,5);
+      b.setb(7,8);
+      equal_test(b.geta1(), 4);
+      equal_test(b.getb2(), 8);
+
+      equal_test(a.play(), 1);
+      equal_test(b.play(), 2);
+
+      a <- b;
+      equal_test(a.geta1(), 4);
+      a.set(100, 200);
+      equal_test(a.geta1(), 100);
+      equal_test(b.geta1(), 100);
+      
+    }
+  };
+
   main() : Object{
     {
       basic_class_test();
       logic_test();
+      class_and_dispatch_test();
     }
   };
+};
+
+class A {
+  a1 : Int;
+  a2 : Int;
+
+  set(x : Int, y : Int) : Object{
+    {
+      a1 <- x;
+      a2 <- y;
+    }
+  };
+
+  get() : SELF_TYPE{
+    self
+  };
+
+  geta1() : Int{
+    a1
+  };
+
+  geta2() : Int{
+    a2
+  };
+
+  play() : Int{
+    1 
+  };
+
+  copy() : SELF_TYPE{
+    let temp : SELF_TYPE in {
+      temp <- new SELF_TYPE;
+      temp.set(2, 3);
+      temp;
+    }
+  };
+};
+
+class B inherits A{
+  b1 : Int;
+  b2 : Int;
+
+  play() : Int{
+    2
+  };
+
+  setb(z : Int, w : Int) : Object{
+    {
+      b1 <- z;
+      b2 <- w;
+    }
+  };
+
+  getb1() : Int {
+    b1
+  };
+
+  getb2() : Int {
+    b2
+  };
+};
+
+class C{
+
 };
