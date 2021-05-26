@@ -1366,12 +1366,9 @@ void cond_class::code(ostream &s) {
   label_index += 2;
 
   emit_load_bool(T1, truebool, s);
-  emit_beq(T1, ACC, then_label_index, s);
-  // Formal test
-  emit_move(T2, ACC, s);
-  equal_test(s);
-  emit_load_bool(T1, truebool, s);
-  emit_beq(T1, ACC, then_label_index, s);
+  emit_load(T1, 3, T1, s);
+  emit_load(T2, 3, ACC, s);
+  emit_beq(T1, T2, then_label_index, s);
 
   // else part
   else_exp->code(s);
@@ -1393,12 +1390,11 @@ void loop_class::code(ostream &s) {
   // while (**pred**)
   emit_label_def(begin_label_index, s);
   pred->code(s);
+
   emit_load_bool(T1, falsebool, s);
-  emit_beq(T1, ACC, end_label_index, s);
-  emit_move(T2, ACC, s);
-  equal_test(s);
-  emit_load_bool(T1, falsebool, s);
-  emit_beq(T1, ACC, end_label_index, s);
+  emit_load(T1, 3, T1, s);
+  emit_load(T2, 3, ACC, s);
+  emit_beq(T1, T2, end_label_index, s);
 
   // {**body**}
   body->code(s);
