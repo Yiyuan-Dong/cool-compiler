@@ -1424,7 +1424,7 @@ void typcase_class::code(ostream &s) {
   emit_label_def(label_index, s);
   label_index++;
 
-
+  int branch_label = label_index;
   int end_label_index = label_index + cases->len();
 
   for (int i = cases->first(); 
@@ -1432,13 +1432,13 @@ void typcase_class::code(ostream &s) {
       i = cases->next(i)){
     Case branch = cases->nth(i);
 
-    emit_label_def(label_index, s);
+    emit_label_def(branch_label, s);
 
     // consider if I should jump to next
     s << LW << T1 << "0(" << branch->get_type_decl()
         << PROTOBJ_SUFFIX << ")";
     emit_load(T2, 0, ACC, s);
-    emit_bne(T1, T2, label_index + 1, s);
+    emit_bne(T1, T2, branch_label++, s);
 
     // add a new temp var
     obj_table->enterscope();
@@ -1530,7 +1530,7 @@ void plus_class::code(ostream &s) {
 
   // copy right expr (will be use as result)
   e2->code(s);
-  s << JAL << "Object.copy" << endl;
+  emit_jal("Object.copy", s);
   obj_index--;
 
   // calculate arith result
@@ -1551,7 +1551,7 @@ void sub_class::code(ostream &s) {
 
   // copy right expr (will be use as result)
   e2->code(s);
-  s << JAL << "Object.copy" << endl;
+  emit_jal("Object.copy", s);
   obj_index--;
 
   // calculate arith result
@@ -1572,7 +1572,7 @@ void mul_class::code(ostream &s) {
 
   // copy right expr (will be use as result)
   e2->code(s);
-  s << JAL << "Object.copy" << endl;
+  emit_jal("Object.copy", s);
   obj_index--;
 
   // calculate arith result
@@ -1593,7 +1593,7 @@ void divide_class::code(ostream &s) {
 
   // copy right expr (will be use as result)
   e2->code(s);
-  s << JAL << "Object.copy" << endl;
+  emit_jal("Object.copy", s);
   obj_index--;
 
   // calculate arith result
@@ -1609,6 +1609,9 @@ void divide_class::code(ostream &s) {
 
 void neg_class::code(ostream &s) {
   e1->code(s);
+
+  // Important! we can not modify int prototype
+  emit_jal("Object.copy", s);
   emit_load(T1, 3, ACC, s);
   emit_neg(T1, T1, s);
   emit_store(T1, 3, ACC, s);
@@ -1650,7 +1653,7 @@ void eq_class::code(ostream &s) {
     e2->code(s);
 
     // call `equality_test`
-    emit_store(T1, -(1 + obj_index - 1), FP, s);
+    emit_load(T1, -(1 + obj_index - 1), FP, s);
     emit_move(T2, ACC, s);
     obj_index--;
     emit_load_bool(ACC, truebool, s);
@@ -1750,7 +1753,7 @@ void new__class::code(ostream &s) {
   }
   else{
     s << LA << ACC << " " << type_name << PROTOBJ_SUFFIX << endl;
-    s << JAL << "Object.copy" << endl;
+    emit_jal("Object.copy", s);
     s << JAL << type_name << CLASSINIT_SUFFIX << endl;
   }
 
