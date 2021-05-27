@@ -60,9 +60,11 @@ private:
    void build_inheritance_tree();
    void set_relations(CgenNodeP nd);
    void reverse_nds();
+   bool subtype_of(CgenNodeP parent, CgenNodeP son);
 
 public:
    CgenClassTable(Classes, ostream& str);
+   void code_branch_jump(Symbol, int);
    void code();
    CgenNodeP root();
 };
@@ -86,6 +88,7 @@ private:
    List<DispatchEntry> *dispatch_table;
    List<AttrEntry> *attrs;
    int attr_count;
+   int class_idx;
 
 public:
    CgenNode(Class_ c,
@@ -106,6 +109,7 @@ public:
    int get_attr_index(Symbol name);
    int get_method_index(Symbol name);
    void code_methods(ostream &str);
+   int get_class_idx(){ return class_idx; }
 };
 
 class BoolConst 

@@ -285,6 +285,28 @@ Class Main inherits Object{
         equal_test(d@B.play(), 2);
         equal_test(d@A.play(), 1);
       };
+
+      equal_test(
+        case new C of 
+          i : Int => 1;
+          s : String => 2;
+          d : D => 3;
+          c : C => 4;
+          b : B => 5;
+          a : A => 6;
+          o : Object => 100;
+        esac
+      , 4);
+
+      equal_test(
+        case new B of 
+          i : Int => 1;
+          s : String => 2;
+          d : D => 3;
+          c : C => 4;
+          o : Object => 100;
+        esac
+      , 100);
     }
   };
 

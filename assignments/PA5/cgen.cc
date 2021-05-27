@@ -943,6 +943,8 @@ void CgenNode::code_prototype_object(ostream &s, int index){
     WORD << attr_count + 3 << endl <<
     WORD << get_name() << DISPTAB_SUFFIX << endl;
 
+  class_idx = index;
+
   for (List<AttrEntry> *ptr = attrs; ptr; ptr = ptr->tl()){
     Symbol type = ptr->hd()->decl_type;
     Symbol name = ptr->hd()->name;
@@ -1016,6 +1018,25 @@ void CgenClassTable::reverse_nds(){
   nds = new_nds;
 }
 
+bool CgenClassTable::subtype_of(CgenNodeP parent, CgenNodeP son){
+  while (!equal_Symbol(son->get_name(), No_class)){
+    if (parent == son){
+      return true;
+    }
+    son = son->get_parentnd();
+  }
+  return false;
+}
+
+void CgenClassTable::code_branch_jump(Symbol branch_type, int jump_label){
+  CgenNodeP parent_node = lookup(branch_type);
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
+    if (subtype_of(parent_node, l->hd())){
+      emit_load_imm(T2, l->hd()->get_class_idx(), str);
+      emit_beq(T1, T2, jump_label, str);
+    }
+  }
+}
 
 void code_start(ostream& s){
   emit_addiu(SP, SP, -12, s);
@@ -1448,23 +1469,27 @@ void typcase_class::code(ostream &s) {
   label_index++;
 
   int branch_label = label_index;
-  int error_label_index = label_index + cases->len();
-  int end_label_index = label_index + cases->len() + 1;
-  label_index += cases->len() + 2;
+  int error_label_index = label_index + cases->len() * 2;
+  int end_label_index = label_index + cases->len() * 2 + 1;
+  label_index += cases->len() * 2 + 2;
+
+  emit_load(T1, 0, ACC, s);
 
   for (int i = cases->first(); 
       cases->more(i);
       i = cases->next(i)){
-    Case branch = cases->nth(i);
 
     emit_label_def(branch_label, s);
 
-    // consider if I should jump to next, compare the class id
-    s << LA << T1 << " " <<  branch->get_type_decl()
-        << PROTOBJ_SUFFIX << endl;
-    s << LW << T1 << " " << "0(" << T1 << ")" << endl;
-    emit_load(T2, 0, ACC, s);
-    emit_bne(T1, T2, ++branch_label, s);
+    Case branch = cases->nth(i);
+    Symbol branch_type = branch->get_type_decl();
+
+    table_ptr->code_branch_jump(branch_type, branch_label + 1);
+
+    emit_branch(branch_label + 2, s);
+    emit_label_def(branch_label + 1, s);
+
+    branch_label += 2;
 
     // add a new temp var
     obj_table->enterscope();
