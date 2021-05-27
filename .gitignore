@@ -1,3 +1,5 @@
 /*/
 !assignments/
 /assignments/*/*.s
+!.gitignore
+!README.md
