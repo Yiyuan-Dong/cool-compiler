@@ -21,6 +21,15 @@ Class Main inherits Object{
     }
   };
 
+  not_equal_test(x : Object, y : Object) : Object{
+    {
+      if not x = y
+      then attr_io.out_string("OK\n")
+      else attr_io.out_string("??\n")
+      fi;
+    }
+  };
+
   print_int(x : Int) : Object{
     {
       (attr_io).out_int(x);
@@ -239,12 +248,16 @@ Class Main inherits Object{
       equal_test(a.play(), 1);
       equal_test(b.play(), 2);
 
+      1234567;
       a <- b;
       equal_test(a.geta1(), 4);
+      attr_io.out_int(a.geta1());
       a.set(100, 200);
       equal_test(a.geta1(), 100);
+      attr_io.out_int(a.geta1());
       equal_test(b.geta1(), 100);
-      
+      attr_io.out_int(b.geta1());
+      not_equal_test(new A, new A);
     }
   };
 
@@ -260,6 +273,7 @@ Class Main inherits Object{
 class A {
   a1 : Int;
   a2 : Int;
+  a_bool : Bool;
 
   set(x : Int, y : Int) : Object{
     {
@@ -284,7 +298,7 @@ class A {
     1 
   };
 
-  copy() : SELF_TYPE{
+  self_copy() : SELF_TYPE{
     let temp : SELF_TYPE in {
       temp <- new SELF_TYPE;
       temp.set(2, 3);
@@ -296,6 +310,8 @@ class A {
 class B inherits A{
   b1 : Int;
   b2 : Int;
+  str : String;
+  b_bool : Bool;
 
   play() : Int{
     2

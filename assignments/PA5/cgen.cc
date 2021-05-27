@@ -863,6 +863,7 @@ void CgenNode::set_parentnd(CgenNodeP p)
 void CgenNode::add_dispatch_func(Symbol func_name, Symbol class_name){
   for (List<DispatchEntry> *l = dispatch_table; l; l = l->tl()){
     if (equal_Symbol(l->hd()->func_name, func_name)){
+      l->hd()->class_name = class_name;
       return;
     }
   }
@@ -875,6 +876,10 @@ void CgenNode::gen_dispatch_tbl(CgenNodeP curr_class){
 
   Features features = curr_class->get_features();
 
+  if (!equal_Symbol(curr_class->get_name(), No_class)){
+    this->gen_dispatch_tbl(curr_class->get_parentnd());
+  }
+
   for (int i = features->first(); features->more(i); i = features->next(i)){
     Feature feature = features->nth(i);
     if (feature->is_method()){
@@ -882,8 +887,12 @@ void CgenNode::gen_dispatch_tbl(CgenNodeP curr_class){
     }
   }
 
-  if (!equal_Symbol(curr_class->get_name(), No_class)){
-    this->gen_dispatch_tbl(curr_class->get_parentnd());
+  if (this == curr_class){  // reverse dispatch_table if is the first func call
+    List<DispatchEntry> *temp_ptr = NULL;
+    for (; dispatch_table; dispatch_table = dispatch_table->tl()){
+      temp_ptr = new List<DispatchEntry>{dispatch_table->hd(), temp_ptr};
+    }
+    dispatch_table = temp_ptr;
   }
 }
 
@@ -1648,54 +1657,24 @@ void lt_class::code(ostream &s) {
 }
 
 void eq_class::code(ostream &s) {
-  Symbol type = e1->get_type();
+  e1->code(s);
+  emit_store(ACC, -(1 + obj_index), FP, s);
+  obj_index++;
 
-  if (
-    equal_Symbol(type, Int) ||
-    equal_Symbol(type, Str) ||
-    equal_Symbol(type, Bool)
-  )
-  // For Int, Bool, String: should check value
-  {
-    e1->code(s);
-    emit_store(ACC, -(1 + obj_index), FP, s);
-    obj_index++;
+  e2->code(s);
 
-    e2->code(s);
+  // call `equality_test`
+  emit_load(T1, -(1 + obj_index - 1), FP, s);
+  obj_index--;
+  emit_move(T2, ACC, s);
 
-    // call `equality_test`
-    emit_load(T1, -(1 + obj_index - 1), FP, s);
-    obj_index--;
-    emit_move(T2, ACC, s);
+  emit_load_bool(ACC, truebool, s);
+  emit_beq(T1, T2, label_index, s); // If have same ptr, must be equal
+  emit_load_bool(A1, falsebool, s);
+  emit_jal("equality_test", s);
 
-    emit_load_bool(ACC, truebool, s);
-    emit_beq(T1, T2, label_index, s); // If have same ptr, must be equal
-    emit_load_bool(A1, falsebool, s);
-    emit_jal("equality_test", s);
-
-    emit_label_def(label_index, s);
-    label_index++;
-  }
-  // For others, just check if has same ptr
-  else{
-    e1->code(s);
-    emit_store(ACC, -(1 + obj_index), FP, s);
-    obj_index++;
-
-    e2->code(s);
-
-    emit_store(T1, -(1 + obj_index - 1), FP, s);
-    obj_index--;
-    emit_move(T2, ACC, s);
-
-    emit_load_bool(ACC, truebool, s);
-    emit_beq(T1, T2, label_index, s);
-    emit_load_bool(ACC, falsebool, s);
-    
-    emit_label_def(label_index, s);
-    label_index++;
-  }
-
+  emit_label_def(label_index, s);
+  label_index++;
 }
 
 void leq_class::code(ostream &s) {
