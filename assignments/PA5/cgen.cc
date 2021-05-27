@@ -373,7 +373,7 @@ static void get_args(char *dest, int index, int length, ostream &s){
 
 // can not deal with `self` !
 static void emit_object(Symbol name, ostream &s){
-  auto obj_entry_ptr = obj_table->lookup(name);
+  ObjEntry *obj_entry_ptr = obj_table->lookup(name);
   assert(obj_entry_ptr);
 
   switch (obj_entry_ptr->type)
@@ -1043,7 +1043,7 @@ void CgenClassTable::code_init(){
 
 int CgenNode::get_attr_index(Symbol name){
   int count = 0;
-  for (auto l = attrs; l; l = l->tl()){
+  for (List<AttrEntry> *l = attrs; l; l = l->tl()){
     if (equal_Symbol(l->hd()->name, name)){
       return count;
     }
@@ -1058,7 +1058,7 @@ int CgenNode::get_attr_index(Symbol name){
 int CgenNode::get_method_index(Symbol name){
   int count = 0;
   
-  for (auto l = dispatch_table; l; l = l->tl()){
+  for (List<DispatchEntry> *l = dispatch_table; l; l = l->tl()){
     if (equal_Symbol(l->hd()->func_name, name)){
       return count;
     }
@@ -1108,7 +1108,7 @@ void CgenNode::code_init(ostream &str){
 }
 
 void CgenClassTable::code_methods(){
-  for (auto *l = nds; l; l = l->tl()){
+  for (List<CgenNode> *l = nds; l; l = l->tl()){
     if (cgen_debug){
       cout << "  class: " << l->hd()->get_name() << endl;
     }
@@ -1129,7 +1129,7 @@ void CgenNode::code_methods(ostream &str){
   obj_table->enterscope();
   int index = 0;
 
-  for (auto l = attrs; l; l = l->tl()){
+  for (List<AttrEntry> * l = attrs; l; l = l->tl()){
     obj_table->addid(
       l->hd()->name, 
       new ObjEntry{TYPE_ATTR, index}
@@ -1263,10 +1263,10 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
    class__class((const class__class &) *nd),
    parentnd(NULL),
    children(NULL),
+   basic_status(bstatus),
    dispatch_table(NULL),
    attrs(NULL),
-   attr_count(0),
-   basic_status(bstatus)
+   attr_count(0)
 { 
    stringtable.add_string(name->get_string());          // Add class name to string table
 }
@@ -1321,7 +1321,7 @@ void static_dispatch_class::code(ostream &s) {
   expr->code(s);
   handle_dispatch_abort(line_number, current_filename, s);
 
-  auto node_ptr = table_ptr->lookup(type_name);
+  CgenNode *node_ptr = table_ptr->lookup(type_name);
   int offset = node_ptr->get_method_index(name);
 
   // The key of static dispatch is we should use 
