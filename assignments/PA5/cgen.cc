@@ -664,6 +664,8 @@ CgenClassTable::CgenClassTable(Classes classes, ostream& s) : nds(NULL) , str(s)
    intclasstag =    2 /* Change to your Int class tag here */;
    boolclasstag =   3 /* Change to your Bool class tag here */;
 
+   class_count = 0;
+
    enterscope();
    if (cgen_debug) cout << "Building CgenClassTable" << endl;
    install_basic_classes();
@@ -1261,6 +1263,9 @@ CgenNode::CgenNode(Class_ nd, Basicness bstatus, CgenClassTableP ct) :
    class__class((const class__class &) *nd),
    parentnd(NULL),
    children(NULL),
+   dispatch_table(NULL),
+   attrs(NULL),
+   attr_count(0),
    basic_status(bstatus)
 { 
    stringtable.add_string(name->get_string());          // Add class name to string table
@@ -1321,7 +1326,7 @@ void static_dispatch_class::code(ostream &s) {
 
   // The key of static dispatch is we should use 
   // the dispatch table in declared type's prototype obj
-  s << LW << T1 << " " ;
+  s << LA << T1 << " " ;
   emit_protobj_ref(type_name, s);
   s << endl;
 
@@ -1443,8 +1448,9 @@ void typcase_class::code(ostream &s) {
   label_index++;
 
   int branch_label = label_index;
-  int end_label_index = label_index + cases->len();
-  label_index += cases->len() + 1;
+  int error_label_index = label_index + cases->len();
+  int end_label_index = label_index + cases->len() + 1;
+  label_index += cases->len() + 2;
 
   for (int i = cases->first(); 
       cases->more(i);
@@ -1481,7 +1487,7 @@ void typcase_class::code(ostream &s) {
   // If reachs here, means statement has no match
   // Object should already be put in ACC, so the
   // only thing we need to do is call `_case_abort`
-
+  emit_label_def(error_label_index, s);
   emit_jal("_case_abort", s);
 
   // Normally should directy jump to here

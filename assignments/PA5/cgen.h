@@ -31,7 +31,7 @@ private:
    int stringclasstag;
    int intclasstag;
    int boolclasstag;
-   int class_count = 0;
+   int class_count;
 
 
 // The following methods emit code for
@@ -83,9 +83,9 @@ private:
    List<CgenNode> *children;                  // Children of class
    Basicness basic_status;                    // `Basic' if class is basic
                                               // `NotBasic' otherwise 
-   List<DispatchEntry> *dispatch_table = NULL;
-   List<AttrEntry> *attrs = NULL;
-   int attr_count = 0;
+   List<DispatchEntry> *dispatch_table;
+   List<AttrEntry> *attrs;
+   int attr_count;
 
 public:
    CgenNode(Class_ c,
